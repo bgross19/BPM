@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPM Maintenance Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="[suspicious link removed]">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
+        .toast-leave { transform: translateY(0); opacity: 1; }
+        .toast-leave-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-screen flex flex-col overflow-hidden">
+
+    <!-- MOCK ROLE SELECTOR -->
+    <div class="bg-indigo-900 text-white text-xs p-2 flex justify-between items-center z-50">
+        <span class="opacity-75"><i class="fas fa-flask mr-1"></i> Apps Script Environment Simulator</span>
+        <div class="flex items-center space-x-2">
+            <span>Current Role:</span>
+            <select id="role-simulator" class="bg-indigo-800 border border-indigo-700 rounded px-2 py-1 text-white focus:outline-none" onchange="switchRole(this.value)">
+                <option value="employee">Employee (Field Crew)</option>
+                <option value="admin">Admin (Payroll/Billing)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- MAIN APP HEADER -->
+    <header class="bg-white shadow-sm z-40 relative">
+        <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-blue-600">
+                <i class="fas fa-tools text-xl"></i>
+                <h1 class="font-bold text-lg tracking-tight">BPM Maintenance</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-sm text-right hidden sm:block">
+                    <p class="font-medium" id="user-name-display">Jason R.</p>
+                    <p class="text-gray-500 text-xs" id="user-role-display">Field Crew</p>
+                </div>
+                <div class="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold" id="user-avatar">
+                    J
+                </div>
+            </div>
+        </div>
+        
+        <!-- App Navigation -->
+        <nav id="app-nav" class="border-t border-gray-100 bg-gray-50">
+            <div class="max-w-4xl mx-auto px-4 flex space-x-6">
+                <button onclick="switchTab('employee-view')" id="tab-employee-view" class="py-3 px-1 border-b-2 border-blue-600 text-blue-600 font-medium text-sm transition-colors">
+                    <i class="fas fa-clock mr-1"></i> Time Punch
+                </button>
+                <button onclick="switchTab('history-view')" id="tab-history-view" class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                    <i class="fas fa-history mr-1"></i> My History
+                </button>
+                <button onclick="switchTab('admin-view')" id="tab-admin-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                    <i class="fas fa-file-invoice-dollar mr-1"></i> Payroll & Billing
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 pb-24">
+        <div class="max-w-4xl mx-auto h-full">
+
+            <!-- EMPLOYEE VIEW: TIME PUNCH -->
+            <div id="employee-view" class="max-w-md mx-auto space-y-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h2 class="text-lg font-semibold mb-4 border-b pb-2">Log Work</h2>
+                    
+                    <form id="work-log-form" onsubmit="submitWorkLog(event)" class="space-y-4">
+                        <!-- Date -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date Completed <span class="text-red-500">*</span></label>
+                            <input type="date" id="log-date" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                        </div>
+
+                        <!-- Property -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Property / House <span class="text-red-500">*</span></label>
+                            <input type="text" id="log-property" list="property-list" autocomplete="off" placeholder="Type to search properties..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white">
+                            <datalist id="property-list"></datalist>
+                        </div>
+
+                        <!-- Task & Hours -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Task Category <span class="text-red-500">*</span></label>
+                                <input type="text" id="log-task" list="task-list" autocomplete="off" placeholder="Type task..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white">
+                                <datalist id="task-list"></datalist>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Hours <span class="text-red-500">*</span></label>
+                                <input type="number" id="log-hours" step="0.25" min="0.25" placeholder="e.g. 1.5" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                            </div>
+                        </div>
+
+                        <!-- Work Notes -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Work Description <span class="text-red-500">*</span></label>
+                            <textarea id="log-notes" rows="2" placeholder="Describe what was fixed or done..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"></textarea>
+                        </div>
+
+                        <!-- Materials Section -->
+                        <div class="mt-6 border-t pt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-medium text-gray-700">Materials & Receipt Uploads</label>
+                                <button type="button" onclick="addMaterialRow()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
+                                    <i class="fas fa-plus mr-1"></i> Add Item
+                                </button>
+                            </div>
+                            
+                            <div id="materials-container" class="space-y-2">
+                                <p id="no-materials-msg" class="text-sm text-gray-400 italic text-center py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">No materials added. Click 'Add Item' if you purchased supplies.</p>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="pt-4">
+                            <button type="submit" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-2">
+                                <span>Submit Punch</span>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- EMPLOYEE VIEW: HISTORY & EDIT PUNCHES -->
+            <div id="history-view" class="hidden space-y-6 max-w-2xl mx-auto">
+                <!-- Daily Hours Summary Cards -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="font-semibold text-gray-800"><i class="fas fa-calendar-day mr-2 text-blue-600"></i>Daily Hours Summary</h2>
+                        <button onclick="loadEmployeeHistory()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                            <i class="fas fa-sync-alt mr-1"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="daily-summary-container" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <p class="col-span-full text-center text-gray-400 py-3 text-sm">Loading daily hours...</p>
+                    </div>
+                </div>
+
+                <!-- Previous Punches List -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50">
+                        <h2 class="font-semibold text-gray-800"><i class="fas fa-list-alt mr-2 text-blue-600"></i>My Previous Punches</h2>
+                        <p class="text-xs text-gray-500">View status and edit your recorded hours</p>
+                    </div>
+                    <div id="punches-list-container" class="divide-y divide-gray-200">
+                        <p class="text-center text-gray-400 py-8 text-sm">Loading punch history...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMIN VIEW: PAYROLL & BILLING DASHBOARD -->
+            <div id="admin-view" class="hidden space-y-6">
+                
+                <!-- DATE RANGE & PAY PERIOD FILTER BAR -->
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b pb-3">
+                        <div class="flex items-center gap-2 text-gray-800 font-semibold">
+                            <i class="fas fa-filter text-blue-600"></i>
+                            <span>Date Range & Pay Period Filter</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="setPayPeriodFilter('current')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">This Bi-Weekly</button>
+                            <button onclick="setPayPeriodFilter('previous')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">Last Bi-Weekly</button>
+                            <button onclick="setPayPeriodFilter('all')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">All Time</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                            <input type="date" id="admin-start-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="loadAdminDashboardData()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                            <input type="date" id="admin-end-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="loadAdminDashboardData()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Approval Status</label>
+                            <select id="admin-status-filter" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none bg-white" onchange="loadAdminDashboardData()">
+                                <option value="All">All Statuses</option>
+                                <option value="Pending">Pending / Submitted</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Paid">Paid</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- METRIC CARDS -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Pending Approval</p>
+                            <h3 class="text-xl font-bold text-yellow-600 mt-1" id="stat-pending-amount">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5" id="stat-pending-hours">0 hrs</p>
+                        </div>
+                        <div class="h-9 w-9 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Approved Payroll</p>
+                            <h3 class="text-xl font-bold text-green-600 mt-1" id="stat-payroll-amount">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5" id="stat-payroll-hours">0 hrs</p>
+                        </div>
+                        <div class="h-9 w-9 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Unbilled Materials</p>
+                            <h3 class="text-xl font-bold text-orange-600 mt-1" id="stat-materials-amount">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Purchased supplies</p>
+                        </div>
+                        <div class="h-9 w-9 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                            <i class="fas fa-receipt"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Unbilled Invoices</p>
+                            <h3 class="text-xl font-bold text-blue-600 mt-1" id="stat-unbilled-total">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Labor + Materials</p>
+                        </div>
+                        <div class="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 1: WORK LOG APPROVAL WORKFLOW -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <div>
+                            <h2 class="font-semibold text-gray-800"><i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Work Log Approval Center</h2>
+                            <p class="text-xs text-gray-500">Review, approve, or reject logged time entries</p>
+                        </div>
+                        <button onclick="loadAdminDashboardData()" class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium shadow-sm transition-colors">
+                            <i class="fas fa-sync-alt mr-1"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-gray-600">
+                            <thead class="bg-gray-100 text-gray-700 uppercase">
+                                <tr>
+                                    <th class="py-3 px-4">Date</th>
+                                    <th class="py-3 px-4">Worker</th>
+                                    <th class="py-3 px-4">Property / Task</th>
+                                    <th class="py-3 px-4">Hours</th>
+                                    <th class="py-3 px-4">Notes</th>
+                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3 px-4 text-right">Approval Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approval-tbody" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-gray-400">Loading work logs for approval...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: EMPLOYEE PAYROLL BREAKDOWN -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <div>
+                            <h2 class="font-semibold text-gray-800"><i class="fas fa-users-cog mr-2 text-blue-600"></i>Employee Payroll Summary</h2>
+                            <p class="text-xs text-gray-500">Calculates gross pay based on hourly rate x approved hours</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600">
+                            <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
+                                <tr>
+                                    <th class="py-3 px-4">Employee</th>
+                                    <th class="py-3 px-4">Pay Rate</th>
+                                    <th class="py-3 px-4">Approved Hrs</th>
+                                    <th class="py-3 px-4">Approved Gross</th>
+                                    <th class="py-3 px-4 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payroll-tbody" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-gray-400">Loading payroll calculations...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: PROPERTY BILLING & INVOICING -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50">
+                        <h2 class="font-semibold text-gray-800"><i class="fas fa-building mr-2 text-blue-600"></i>Property Invoicing Reports</h2>
+                        <p class="text-xs text-gray-500">Aggregates unbilled labor hours and material expenses per house</p>
+                    </div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4" id="property-cards-container">
+                        <p class="col-span-2 py-8 text-center text-gray-400">Loading property invoice data...</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- EDIT PUNCH MODAL -->
+    <div id="edit-punch-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 transform scale-95 transition-transform duration-300" id="edit-modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-lg font-bold text-gray-900"><i class="fas fa-edit text-blue-600 mr-2"></i>Edit Punch Entry</h3>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="edit-punch-form" onsubmit="submitPunchEdit(event)" class="space-y-4">
+                <input type="hidden" id="edit-work-log-id" />
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date Completed</label>
+                    <input type="date" id="edit-log-date" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Property / House</label>
+                    <input type="text" id="edit-log-property" list="property-list" autocomplete="off" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
+                        <input type="text" id="edit-log-task" list="task-list" autocomplete="off" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hours</label>
+                        <input type="number" id="edit-log-hours" step="0.25" min="0.25" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Work Description</label>
+                    <textarea id="edit-log-notes" rows="2" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                </div>
+                <div class="pt-2 flex justify-end gap-3">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="save-edit-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- INVOICE REPORT MODAL -->
+    <div id="invoice-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 my-8 flex flex-col max-h-[90vh] overflow-hidden transform scale-95 transition-transform duration-300" id="invoice-modal-content">
+            <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900" id="inv-modal-property">Property Invoice</h3>
+                    <p class="text-xs text-gray-500" id="inv-modal-date">Date generated</p>
+                </div>
+                <button onclick="closeInvoiceModal()" class="text-gray-400 hover:text-gray-600 p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6 flex-1 text-sm">
+                <!-- Labor Table -->
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-2 text-xs uppercase tracking-wider text-blue-600">Itemized Labor</h4>
+                    <table class="w-full text-left border rounded-lg overflow-hidden">
+                        <thead class="bg-gray-100 text-xs text-gray-600">
+                            <tr>
+                                <th class="p-2 border-b">Date</th>
+                                <th class="p-2 border-b">Worker</th>
+                                <th class="p-2 border-b">Task / Notes</th>
+                                <th class="p-2 border-b text-right">Hrs</th>
+                                <th class="p-2 border-b text-right">Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inv-labor-tbody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+
+                <!-- Materials Table -->
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-2 text-xs uppercase tracking-wider text-orange-600">Material Expenses & Receipts</h4>
+                    <table class="w-full text-left border rounded-lg overflow-hidden">
+                        <thead class="bg-gray-100 text-xs text-gray-600">
+                            <tr>
+                                <th class="p-2 border-b">Vendor</th>
+                                <th class="p-2 border-b">Description</th>
+                                <th class="p-2 border-b text-right">Cost</th>
+                                <th class="p-2 border-b text-center">Receipt</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inv-materials-tbody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+
+                <!-- Totals Summary -->
+                <div class="bg-gray-50 p-4 rounded-lg space-y-2 border">
+                    <div class="flex justify-between text-gray-600">
+                        <span>Total Labor Cost:</span>
+                        <span id="inv-total-labor">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600">
+                        <span>Total Materials Cost:</span>
+                        <span id="inv-total-materials">$0.00</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-gray-900 text-base pt-2 border-t">
+                        <span>Grand Invoice Total:</span>
+                        <span id="inv-grand-total" class="text-blue-600">$0.00</span>
+                    </div>
+                </div>
+
+                <!-- Export Link Container -->
+                <div id="export-links-container" class="hidden p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs space-y-1">
+                    <p class="font-semibold text-blue-800"><i class="fas fa-check-circle mr-1"></i> Invoice Exported Successfully!</p>
+                    <div class="flex gap-4 pt-1">
+                        <a id="link-doc-url" href="#" target="_blank" class="text-blue-600 hover:underline font-medium"><i class="fas fa-file-word mr-1"></i> Open Google Doc</a>
+                        <a id="link-pdf-url" href="#" target="_blank" class="text-blue-600 hover:underline font-medium"><i class="fas fa-file-pdf mr-1"></i> View PDF in Drive</a>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
+                <button id="export-pdf-btn" onclick="exportInvoicePDF()" class="px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
+                    <i class="fas fa-file-pdf text-red-500"></i>
+                    <span>Export PDF / Doc</span>
+                </button>
+                <div class="flex gap-3">
+                    <button onclick="closeInvoiceModal()" class="px-4 py-2 text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors text-sm">
+                        Close
+                    </button>
+                    <button id="mark-billed-btn" onclick="executeMarkBilled()" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Mark as Billed</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM CONFIRMATION MODAL -->
+    <div id="confirmation-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 transform scale-95 transition-transform duration-300 p-6" id="modal-content">
+            <div class="flex items-center gap-3 text-yellow-600 mb-4">
+                <i class="fas fa-exclamation-triangle text-2xl"></i>
+                <h3 class="text-lg font-bold text-gray-900">Unlisted Property</h3>
+            </div>
+            <p class="text-gray-600 text-sm mb-6" id="modal-text">
+                The property <span id="unlisted-prop-name" class="font-bold"></span> is not in our standard database. Are you sure you want to log hours to this new location?
+            </p>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeWarningModal(false)" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
+                    No, fix it
+                </button>
+                <button type="button" onclick="closeWarningModal(true)" class="px-4 py-2 text-white bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-medium shadow-sm transition-colors">
+                    Yes, submit anyway
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION SYSTEM -->
+    <div id="toast-container" class="fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+        <div id="toast-message" class="bg-gray-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 transform translate-y-full opacity-0 transition-all duration-300 max-w-sm w-full">
+            <i id="toast-icon" class="fas fa-check-circle text-green-400 text-lg"></i>
+            <div>
+                <p id="toast-title" class="font-medium text-sm"></p>
+                <p id="toast-desc" class="text-xs text-gray-300"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let materialCount = 0;
+        let currentRole = 'employee';
+        let validProperties = [];
+        let validTasks = [];
+        let bypassPropertyWarning = false;
+        let activeInvoiceProperty = null;
+        let userPunchesCache = [];
+
+        document.getElementById('log-date').valueAsDate = new Date();
+
+        // Environment Runner
+        const mockGoogleScriptRun = {
+            withSuccessHandler: function(callback) {
+                return {
+                    getDropdownData: function() {
+                        setTimeout(() => {
+                            callback({
+                                properties: ["Alpha Phi", "4638 B", "645 Ber", "Company Office"],
+                                tasks: ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"]
+                            });
+                        }, 300);
+                    },
+                    submitWorkLog: function(payload) {
+                        setTimeout(() => callback({ success: true }), 500);
+                    },
+                    getUserRole: function() {
+                        setTimeout(() => callback({ role: 'admin', employeeId: 'EMP-001', name: 'Brian Gross' }), 300);
+                    },
+                    getEmployeeWorkLogs: function() {
+                        setTimeout(() => callback({
+                            success: true,
+                            employeeName: 'Brian Gross',
+                            dailySummary: [
+                                { date: '2026-09-12', totalHours: 6.5 },
+                                { date: '2026-09-11', totalHours: 8.0 }
+                            ],
+                            punches: [
+                                { workLogId: '1', dateCompleted: '2026-09-12', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', billingStatus: 'Unbilled' },
+                                { workLogId: '2', dateCompleted: '2026-09-12', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Fixed sink pipe leak', payrollStatus: 'Approved', billingStatus: 'Unbilled' },
+                                { workLogId: '3', dateCompleted: '2026-09-11', propertyId: 'Company Office', taskId: 'Handyman', hoursWorked: 8.0, workNotes: 'Repaired door hinges', payrollStatus: 'Paid', billingStatus: 'Billed' }
+                            ]
+                        }), 300);
+                    },
+                    updateWorkLog: function(payload) {
+                        setTimeout(() => callback({ success: true, message: 'Punch updated successfully' }), 400);
+                    },
+                    updateApprovalStatus: function(workLogId, status) {
+                        setTimeout(() => callback({ success: true, message: 'Status updated to ' + status }), 300);
+                    },
+                    getAdminPayrollData: function(startDate, endDate, statusFilter) {
+                        setTimeout(() => {
+                            callback({
+                                success: true,
+                                metrics: {
+                                    pendingPayrollHours: 15.0,
+                                    pendingPayrollGrossPay: 525.00,
+                                    approvedPayrollHours: 27.5,
+                                    approvedPayrollGrossPay: 687.50,
+                                    unbilledMaterialsCost: 1240.50,
+                                    unbilledLaborCost: 1212.50,
+                                    totalUnbilledInvoiceAmount: 2453.00,
+                                    totalLogs: 14
+                                },
+                                workLogs: [
+                                    { workLogId: '1', dateCompleted: '2026-09-12', employeeName: 'Brian Gross', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', grossPay: 70.00 },
+                                    { workLogId: '2', dateCompleted: '2026-09-12', employeeName: 'Jason R.', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Pipe leak repair', payrollStatus: 'Approved', grossPay: 112.50 }
+                                ],
+                                employeeSummaries: [
+                                    { employeeId: 'EMP-001', name: 'Brian Gross', payRate: 35.00, approvedHours: 15.0, approvedGrossPay: 525.00 },
+                                    { employeeId: 'EMP-002', name: 'Jason R.', payRate: 25.00, approvedHours: 27.5, approvedGrossPay: 687.50 }
+                                ],
+                                propertySummaries: [
+                                    { propertyId: 'Alpha Phi', unbilledHours: 18.0, unbilledLaborCost: 550.00, unbilledMaterialsCost: 420.00, totalUnbilled: 970.00 },
+                                    { propertyId: '4638 B', unbilledHours: 12.5, unbilledLaborCost: 387.50, unbilledMaterialsCost: 820.50, totalUnbilled: 1208.00 }
+                                ]
+                            });
+                        }, 400);
+                    },
+                    markPayrollPaid: function(empId) {
+                        setTimeout(() => callback({ success: true, message: 'Payroll updated' }), 400);
+                    },
+                    generateInvoiceReport: function(propId) {
+                        setTimeout(() => {
+                            callback({
+                                success: true,
+                                invoice: {
+                                    propertyId: propId,
+                                    invoiceDate: new Date().toLocaleDateString(),
+                                    laborItems: [
+                                        { dateCompleted: '2026-09-10', employeeName: 'Jason R.', taskId: 'Plumbing', hoursWorked: 4, grossPay: 100, workNotes: 'Replaced sink valves' },
+                                        { dateCompleted: '2026-09-11', employeeName: 'Brian Gross', taskId: 'Electrical', hoursWorked: 3, grossPay: 105, workNotes: 'Installed breaker box' }
+                                    ],
+                                    materialItems: [
+                                        { vendor: 'Home Depot', description: 'PVC Pipe fittings', cost: 85.50, receiptUrl: '#' },
+                                        { vendor: 'Lowe\'s', description: 'Circuit panel switch', cost: 150.00, receiptUrl: '#' }
+                                    ],
+                                    totalHours: 7,
+                                    totalLaborCost: 205.00,
+                                    totalMaterialsCost: 235.50,
+                                    grandTotal: 440.50
+                                }
+                            });
+                        }, 400);
+                    },
+                    exportInvoicePDF: function(propId) {
+                        setTimeout(() => {
+                            callback({
+                                success: true,
+                                docUrl: '#',
+                                pdfUrl: '#',
+                                fileName: 'Invoice - ' + propId + '.pdf',
+                                base64Pdf: ''
+                            });
+                        }, 800);
+                    },
+                    markPropertyBilled: function(propId) {
+                        setTimeout(() => callback({ success: true, message: 'Property billed' }), 400);
+                    }
+                };
+            }
+        };
+        const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
+
+        window.onload = function() {
+            scriptRunner.withSuccessHandler(populateDatalists).getDropdownData();
+            scriptRunner.withSuccessHandler(function(userInfo) {
+                if(userInfo && userInfo.name) {
+                    document.getElementById('user-name-display').innerText = userInfo.name;
+                    document.getElementById('user-role-display').innerText = userInfo.role === 'admin' ? 'Admin' : 'Field Crew';
+                    document.getElementById('user-avatar').innerText = userInfo.name.charAt(0);
+                    if(userInfo.role === 'admin') {
+                        document.getElementById('role-simulator').value = 'admin';
+                        switchRole('admin');
+                    }
+                }
+            }).getUserRole();
+        };
+
+        function populateDatalists(data) {
+            validProperties = data.properties;
+            validTasks = data.tasks;
+
+            const propList = document.getElementById('property-list');
+            propList.innerHTML = '';
+            validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+
+            const taskList = document.getElementById('task-list');
+            taskList.innerHTML = '';
+            validTasks.forEach(task => taskList.insertAdjacentHTML('beforeend', `<option value="${task}">`));
+        }
+
+        function switchRole(role) {
+            currentRole = role;
+            const adminTab = document.getElementById('tab-admin-view');
+            if (role === 'admin') {
+                adminTab.classList.remove('hidden');
+            } else {
+                adminTab.classList.add('hidden');
+                if (!document.getElementById('admin-view').classList.contains('hidden')) {
+                    switchTab('employee-view');
+                }
+            }
+        }
+
+        function switchTab(tabId) {
+            document.getElementById('employee-view').classList.add('hidden');
+            document.getElementById('history-view').classList.add('hidden');
+            document.getElementById('admin-view').classList.add('hidden');
+            
+            ['employee-view', 'history-view', 'admin-view'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if(el) {
+                    el.classList.remove('border-blue-600', 'text-blue-600');
+                    el.classList.add('border-transparent', 'text-gray-500');
+                }
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeTabEl = document.getElementById(`tab-${tabId}`);
+            if(activeTabEl) {
+                activeTabEl.classList.remove('border-transparent', 'text-gray-500');
+                activeTabEl.classList.add('border-blue-600', 'text-blue-600');
+            }
+
+            if(tabId === 'history-view') {
+                loadEmployeeHistory();
+            } else if(tabId === 'admin-view') {
+                loadAdminDashboardData();
+            }
+        }
+
+        // --- EMPLOYEE HISTORY & EDIT PUNCHES ---
+        function loadEmployeeHistory() {
+            scriptRunner.withSuccessHandler(renderEmployeeHistory).getEmployeeWorkLogs();
+        }
+
+        function renderEmployeeHistory(res) {
+            if(!res || !res.success) {
+                showToast('Error', res ? res.error : 'Failed to load punch history', 'error');
+                return;
+            }
+
+            userPunchesCache = res.punches || [];
+
+            // Daily Summary Cards
+            const summaryContainer = document.getElementById('daily-summary-container');
+            summaryContainer.innerHTML = '';
+            if(!res.dailySummary || res.dailySummary.length === 0) {
+                summaryContainer.innerHTML = '<p class="col-span-full text-center text-gray-400 py-3 text-sm">No daily hours logged yet.</p>';
+            } else {
+                res.dailySummary.forEach(item => {
+                    summaryContainer.insertAdjacentHTML('beforeend', `
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-500 font-medium">${item.date}</p>
+                            <p class="text-lg font-bold text-blue-600 mt-1">${item.totalHours.toFixed(2)} <span class="text-xs font-normal text-gray-600">hrs</span></p>
+                        </div>
+                    `);
+                });
+            }
+
+            // Punch Log List
+            const punchesContainer = document.getElementById('punches-list-container');
+            punchesContainer.innerHTML = '';
+            if(!res.punches || res.punches.length === 0) {
+                punchesContainer.innerHTML = '<p class="text-center text-gray-400 py-8 text-sm">No previous punches recorded.</p>';
+            } else {
+                res.punches.forEach((punch) => {
+                    const statusLower = punch.payrollStatus.toLowerCase();
+                    let statusClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                    if (statusLower === 'approved') statusClass = 'bg-blue-100 text-blue-700 border-blue-200';
+                    if (statusLower === 'paid') statusClass = 'bg-green-100 text-green-700 border-green-200';
+                    if (statusLower === 'rejected') statusClass = 'bg-red-100 text-red-700 border-red-200';
+
+                    const isPaid = statusLower === 'paid';
+                    
+                    punchesContainer.insertAdjacentHTML('beforeend', `
+                        <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50 transition-colors">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold text-gray-900">${punch.propertyId}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${statusClass}">${punch.payrollStatus}</span>
+                                </div>
+                                <p class="text-xs text-gray-600"><span class="font-medium text-gray-800">${punch.taskId}</span> &bull; ${punch.workNotes}</p>
+                                <p class="text-xs text-gray-400"><i class="far font-medium fa-calendar mr-1"></i>${punch.dateCompleted}</p>
+                            </div>
+                            <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 pt-2 sm:pt-0">
+                                <span class="font-bold text-gray-800 text-sm">${punch.hoursWorked.toFixed(2)} hrs</span>
+                                <button onclick="openEditModal('${punch.workLogId}')" ${isPaid ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center gap-1">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                            </div>
+                        </div>
+                    `);
+                });
+            }
+        }
+
+        function openEditModal(workLogId) {
+            const punch = userPunchesCache.find(p => p.workLogId === workLogId);
+            if (!punch) return;
+
+            document.getElementById('edit-work-log-id').value = punch.workLogId;
+            document.getElementById('edit-log-date').value = punch.dateCompleted;
+            document.getElementById('edit-log-property').value = punch.propertyId;
+            document.getElementById('edit-log-task').value = punch.taskId;
+            document.getElementById('edit-log-hours').value = punch.hoursWorked;
+            document.getElementById('edit-log-notes').value = punch.workNotes;
+
+            const modal = document.getElementById('edit-punch-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                document.getElementById('edit-modal-content').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-punch-modal');
+            modal.classList.add('opacity-0');
+            document.getElementById('edit-modal-content').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        function submitPunchEdit(e) {
+            if(e) e.preventDefault();
+
+            const btn = document.getElementById('save-edit-btn');
+            const originalBtnText = btn.innerText;
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+
+            const payload = {
+                workLogId: document.getElementById('edit-work-log-id').value,
+                date: document.getElementById('edit-log-date').value,
+                propertyId: document.getElementById('edit-log-property').value.trim(),
+                taskId: document.getElementById('edit-log-task').value.trim(),
+                hours: parseFloat(document.getElementById('edit-log-hours').value),
+                notes: document.getElementById('edit-log-notes').value
+            };
+
+            scriptRunner.withSuccessHandler(function(res) {
+                btn.innerText = originalBtnText;
+                btn.disabled = false;
+
+                if (res.success) {
+                    showToast('Success', 'Punch log updated successfully.', 'success');
+                    closeEditModal();
+                    loadEmployeeHistory();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            }).updateWorkLog(payload);
+        }
+
+        // --- PAY PERIOD FILTER HELPERS ---
+        function setPayPeriodFilter(type) {
+            const startInput = document.getElementById('admin-start-date');
+            const endInput = document.getElementById('admin-end-date');
+            const now = new Date();
+
+            if (type === 'all') {
+                startInput.value = '';
+                endInput.value = '';
+            } else if (type === 'current') {
+                const dayOfWeek = now.getDay();
+                const start = new Date(now);
+                start.setDate(now.getDate() - dayOfWeek - 7); // Start of 2-week block
+                startInput.valueAsDate = start;
+                endInput.valueAsDate = now;
+            } else if (type === 'previous') {
+                const start = new Date(now);
+                start.setDate(now.getDate() - 28);
+                const end = new Date(now);
+                end.setDate(now.getDate() - 14);
+                startInput.valueAsDate = start;
+                endInput.valueAsDate = end;
+            }
+            loadAdminDashboardData();
+        }
+
+        // --- ADMIN DASHBOARD CALCULATIONS & RENDERING ---
+        function loadAdminDashboardData() {
+            const startDate = document.getElementById('admin-start-date').value;
+            const endDate = document.getElementById('admin-end-date').value;
+            const statusFilter = document.getElementById('admin-status-filter').value;
+
+            scriptRunner.withSuccessHandler(renderAdminDashboard).getAdminPayrollData(startDate, endDate, statusFilter);
+        }
+
+        function renderAdminDashboard(res) {
+            if(!res || !res.success) {
+                showToast('Error', res ? res.error : 'Failed to fetch payroll data', 'error');
+                return;
+            }
+
+            const m = res.metrics;
+            document.getElementById('stat-pending-amount').innerText = '$' + (m.pendingPayrollGrossPay || 0).toFixed(2);
+            document.getElementById('stat-pending-hours').innerText = (m.pendingPayrollHours || 0).toFixed(1) + ' hrs pending';
+            
+            document.getElementById('stat-payroll-amount').innerText = '$' + (m.approvedPayrollGrossPay || 0).toFixed(2);
+            document.getElementById('stat-payroll-hours').innerText = (m.approvedPayrollHours || 0).toFixed(1) + ' hrs approved';
+
+            document.getElementById('stat-materials-amount').innerText = '$' + (m.unbilledMaterialsCost || 0).toFixed(2);
+            document.getElementById('stat-unbilled-total').innerText = '$' + (m.totalUnbilledInvoiceAmount || 0).toFixed(2);
+
+            // Render Approval Work Logs Table
+            const approvalTbody = document.getElementById('approval-tbody');
+            approvalTbody.innerHTML = '';
+            if(!res.workLogs || res.workLogs.length === 0) {
+                approvalTbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-400">No work logs found for selected filters.</td></tr>';
+            } else {
+                res.workLogs.forEach(log => {
+                    const statusLower = log.payrollStatus.toLowerCase();
+                    let badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                    if(statusLower === 'approved') badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
+                    if(statusLower === 'paid') badgeClass = 'bg-green-100 text-green-700 border-green-200';
+                    if(statusLower === 'rejected') badgeClass = 'bg-red-100 text-red-700 border-red-200';
+
+                    const isPaid = statusLower === 'paid';
+
+                    approvalTbody.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-gray-50 border-b">
+                            <td class="py-3 px-4 font-medium">${log.dateCompleted}</td>
+                            <td class="py-3 px-4 font-medium text-gray-900">${log.employeeName}</td>
+                            <td class="py-3 px-4"><span class="font-semibold text-gray-800">${log.propertyId}</span> <span class="text-gray-400">&bull; ${log.taskId}</span></td>
+                            <td class="py-3 px-4 font-bold text-gray-800">${log.hoursWorked.toFixed(2)} hrs</td>
+                            <td class="py-3 px-4 text-gray-500 max-w-xs truncate">${log.workNotes}</td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${log.payrollStatus}</span></td>
+                            <td class="py-3 px-4 text-right">
+                                <div class="flex justify-end gap-1">
+                                    <button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isPaid || statusLower === 'approved' ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded transition-colors text-xs">
+                                        Approve
+                                    </button>
+                                    <button onclick="setApprovalStatus('${log.workLogId}', 'Rejected')" ${isPaid || statusLower === 'rejected' ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded transition-colors text-xs">
+                                        Reject
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+
+            // Render Payroll Table
+            const payrollTbody = document.getElementById('payroll-tbody');
+            payrollTbody.innerHTML = '';
+            if(!res.employeeSummaries || res.employeeSummaries.length === 0) {
+                payrollTbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">No employees found.</td></tr>';
+            } else {
+                res.employeeSummaries.forEach(emp => {
+                    payrollTbody.insertAdjacentHTML('beforeend', `
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-3 px-4 font-medium text-gray-900">${emp.name} <span class="text-xs text-gray-400">(${emp.employeeId})</span></td>
+                            <td class="py-3 px-4">$${emp.payRate.toFixed(2)}/hr</td>
+                            <td class="py-3 px-4">${emp.approvedHours.toFixed(1)} hrs</td>
+                            <td class="py-3 px-4 font-semibold text-gray-800">$${emp.approvedGrossPay.toFixed(2)}</td>
+                            <td class="py-3 px-4 text-right">
+                                <button onclick="markEmployeePayrollPaid('${emp.employeeId}')" ${emp.approvedHours === 0 ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white font-medium rounded-lg shadow-sm transition-colors">
+                                    Mark Paid
+                                </button>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+
+            // Render Property Cards
+            const propContainer = document.getElementById('property-cards-container');
+            propContainer.innerHTML = '';
+            if(!res.propertySummaries || res.propertySummaries.length === 0) {
+                propContainer.innerHTML = '<p class="col-span-2 text-center text-gray-400 py-4">No unbilled property items found.</p>';
+            } else {
+                res.propertySummaries.forEach(prop => {
+                    propContainer.insertAdjacentHTML('beforeend', `
+                        <div class="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between space-y-3">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-bold text-gray-900 text-base">${prop.propertyId}</h3>
+                                    <p class="text-xs text-gray-500">${prop.unbilledHours.toFixed(1)} unbilled hrs</p>
+                                </div>
+                                <span class="text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
+                                    $${prop.totalUnbilled.toFixed(2)}
+                                </span>
+                            </div>
+                            <div class="text-xs text-gray-600 space-y-1">
+                                <div class="flex justify-between"><span>Labor:</span><span>$${prop.unbilledLaborCost.toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span>Materials:</span><span>$${prop.unbilledMaterialsCost.toFixed(2)}</span></div>
+                            </div>
+                            <button onclick="openInvoiceReport('${prop.propertyId}')" class="w-full text-xs py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors flex justify-center items-center gap-1">
+                                <i class="fas fa-receipt"></i> Generate Invoice Report
+                            </button>
+                        </div>
+                    `);
+                });
+            }
+        }
+
+        function setApprovalStatus(workLogId, status) {
+            scriptRunner.withSuccessHandler(function(res) {
+                if(res.success) {
+                    showToast('Updated', res.message, 'success');
+                    loadAdminDashboardData();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            }).updateApprovalStatus(workLogId, status);
+        }
+
+        function markEmployeePayrollPaid(empId) {
+            scriptRunner.withSuccessHandler(function(res) {
+                if(res.success) {
+                    showToast('Success', 'Payroll status updated to Paid.', 'success');
+                    loadAdminDashboardData();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            }).markPayrollPaid(empId);
+        }
+
+        function openInvoiceReport(propertyId) {
+            activeInvoiceProperty = propertyId;
+            document.getElementById('export-links-container').classList.add('hidden');
+            
+            scriptRunner.withSuccessHandler(function(res) {
+                if(!res.success) {
+                    showToast('Error', res.error, 'error');
+                    return;
+                }
+                const inv = res.invoice;
+                document.getElementById('inv-modal-property').innerText = 'Invoice Report: ' + inv.propertyId;
+                document.getElementById('inv-modal-date').innerText = 'Generated on ' + inv.invoiceDate;
+
+                // Populate Labor Table
+                const laborTbody = document.getElementById('inv-labor-tbody');
+                laborTbody.innerHTML = '';
+                if(inv.laborItems.length === 0) {
+                    laborTbody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-400">No unbilled labor logs.</td></tr>';
+                } else {
+                    inv.laborItems.forEach(item => {
+                        laborTbody.insertAdjacentHTML('beforeend', `
+                            <tr>
+                                <td class="p-2 border-b text-xs">${item.dateCompleted}</td>
+                                <td class="p-2 border-b text-xs font-medium">${item.employeeName}</td>
+                                <td class="p-2 border-b text-xs">${item.taskId} - ${item.workNotes}</td>
+                                <td class="p-2 border-b text-xs text-right">${item.hoursWorked}</td>
+                                <td class="p-2 border-b text-xs text-right font-medium">$${item.grossPay.toFixed(2)}</td>
+                            </tr>
+                        `);
+                    });
+                }
+
+                // Populate Materials Table
+                const matTbody = document.getElementById('inv-materials-tbody');
+                matTbody.innerHTML = '';
+                if(inv.materialItems.length === 0) {
+                    matTbody.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-gray-400">No material expenses.</td></tr>';
+                } else {
+                    inv.materialItems.forEach(mat => {
+                        const receiptBtn = mat.receiptUrl 
+                            ? `<a href="${mat.receiptUrl}" target="_blank" class="text-xs text-blue-600 hover:underline"><i class="fas fa-paperclip mr-1"></i>View File</a>`
+                            : `<span class="text-xs text-gray-400">None</span>`;
+
+                        matTbody.insertAdjacentHTML('beforeend', `
+                            <tr>
+                                <td class="p-2 border-b text-xs font-medium">${mat.vendor}</td>
+                                <td class="p-2 border-b text-xs">${mat.description}</td>
+                                <td class="p-2 border-b text-xs text-right font-medium">$${mat.cost.toFixed(2)}</td>
+                                <td class="p-2 border-b text-xs text-center">${receiptBtn}</td>
+                            </tr>
+                        `);
+                    });
+                }
+
+                document.getElementById('inv-total-labor').innerText = '$' + inv.totalLaborCost.toFixed(2);
+                document.getElementById('inv-total-materials').innerText = '$' + inv.totalMaterialsCost.toFixed(2);
+                document.getElementById('inv-grand-total').innerText = '$' + inv.grandTotal.toFixed(2);
+
+                const modal = document.getElementById('invoice-modal');
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    document.getElementById('invoice-modal-content').classList.remove('scale-95');
+                }, 10);
+            }).generateInvoiceReport(propertyId);
+        }
+
+        function exportInvoicePDF() {
+            if(!activeInvoiceProperty) return;
+
+            const btn = document.getElementById('export-pdf-btn');
+            const originalBtnHTML = btn.innerHTML;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin text-red-500"></i> <span>Generating PDF...</span>`;
+            btn.disabled = true;
+
+            scriptRunner.withSuccessHandler(function(res) {
+                btn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+
+                if(!res.success) {
+                    showToast('Export Error', res.error, 'error');
+                    return;
+                }
+
+                // Populate Links
+                document.getElementById('link-doc-url').href = res.docUrl;
+                document.getElementById('link-pdf-url').href = res.pdfUrl;
+                document.getElementById('export-links-container').classList.remove('hidden');
+
+                // Trigger automatic browser download if base64 data is present
+                if(res.base64Pdf) {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = 'data:application/pdf;base64,' + res.base64Pdf;
+                    downloadLink.download = res.fileName;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                }
+
+                showToast('Export Complete', 'Invoice saved to Google Drive and downloaded.', 'success');
+            }).exportInvoicePDF(activeInvoiceProperty);
+        }
+
+        function closeInvoiceModal() {
+            const modal = document.getElementById('invoice-modal');
+            modal.classList.add('opacity-0');
+            document.getElementById('invoice-modal-content').classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        function executeMarkBilled() {
+            if(!activeInvoiceProperty) return;
+            scriptRunner.withSuccessHandler(function(res) {
+                if(res.success) {
+                    showToast('Success', 'Invoice items marked as Billed.', 'success');
+                    closeInvoiceModal();
+                    loadAdminDashboardData();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            }).markPropertyBilled(activeInvoiceProperty);
+        }
+
+        // --- MATERIAL EXPENSES & FORM SUBMISSION WITH FILE UPLOAD ---
+        function addMaterialRow() {
+            const container = document.getElementById('materials-container');
+            const noMsg = document.getElementById('no-materials-msg');
+            if (noMsg) noMsg.style.display = 'none';
+
+            materialCount++;
+            const rowId = `material-row-${materialCount}`;
+
+            const rowHTML = `
+                <div id="${rowId}" class="flex flex-col sm:flex-row gap-2 items-start bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <div class="flex-1 space-y-2 w-full">
+                        <select class="w-full rounded border-gray-300 border p-2 text-sm focus:ring-blue-500 outline-none material-vendor bg-white" required>
+                            <option value="" disabled selected>Vendor...</option>
+                            <option value="Home Depot">Home Depot</option>
+                            <option value="Lowes">Lowe's</option>
+                            <option value="Sherwin Williams">Sherwin Williams</option>
+                            <option value="Menards">Menards</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="text" placeholder="Item description" required class="w-full rounded border-gray-300 border p-2 text-sm focus:ring-blue-500 outline-none material-desc" />
+                    </div>
+                    <div class="w-full sm:w-32 space-y-2">
+                        <input type="number" step="0.01" min="0.01" placeholder="$ Cost" required class="w-full rounded border-gray-300 border p-2 text-sm focus:ring-blue-500 outline-none material-cost" />
+                        <div>
+                            <label class="block text-[10px] text-gray-500 font-medium">Receipt Photo / PDF</label>
+                            <input type="file" accept="image/*,application/pdf" class="w-full text-xs text-gray-500 material-file border rounded bg-white p-1" />
+                        </div>
+                    </div>
+                    <div class="self-end sm:self-center">
+                        <button type="button" onclick="removeMaterialRow('${rowId}')" class="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs p-2 rounded transition-colors">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', rowHTML);
+        }
+
+        function removeMaterialRow(rowId) {
+            document.getElementById(rowId).remove();
+            const container = document.getElementById('materials-container');
+            if (container.children.length === 1 && container.children[0].id === 'no-materials-msg') {
+                document.getElementById('no-materials-msg').style.display = 'block';
+            }
+        }
+
+        function submitWorkLog(e) {
+            if(e) e.preventDefault();
+            const selectedProperty = document.getElementById('log-property').value.trim();
+            if (!validProperties.includes(selectedProperty) && !bypassPropertyWarning) {
+                showWarningModal(selectedProperty);
+                return;
+            }
+            executeSubmission();
+        }
+
+        function showWarningModal(propertyName) {
+            const modal = document.getElementById('confirmation-modal');
+            document.getElementById('unlisted-prop-name').innerText = `"${propertyName}"`;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                document.getElementById('modal-content').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeWarningModal(proceed) {
+            const modal = document.getElementById('confirmation-modal');
+            modal.classList.add('opacity-0');
+            document.getElementById('modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                if (proceed) {
+                    bypassPropertyWarning = true;
+                    submitWorkLog();
+                } else {
+                    document.getElementById('log-property').focus();
+                }
+            }, 300);
+        }
+
+        async function executeSubmission() {
+            const btn = document.getElementById('submit-btn');
+            const originalBtnHTML = btn.innerHTML;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Saving & Uploading...</span>`;
+            btn.disabled = true;
+
+            const payload = {
+                date: document.getElementById('log-date').value,
+                propertyId: document.getElementById('log-property').value.trim(),
+                taskId: document.getElementById('log-task').value.trim(),
+                hours: parseFloat(document.getElementById('log-hours').value),
+                notes: document.getElementById('log-notes').value,
+                materials: []
+            };
+
+            const materialRows = document.querySelectorAll('[id^="material-row-"]');
+            
+            for (let i = 0; i < materialRows.length; i++) {
+                const row = materialRows[i];
+                const vendor = row.querySelector('.material-vendor').value;
+                const desc = row.querySelector('.material-desc').value;
+                const cost = parseFloat(row.querySelector('.material-cost').value);
+                const fileInput = row.querySelector('.material-file');
+
+                let fileData = null;
+                let fileName = null;
+                let fileType = null;
+
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    const file = fileInput.files[0];
+                    fileName = file.name;
+                    fileType = file.type;
+                    fileData = await readFileAsBase64(file);
+                }
+
+                payload.materials.push({
+                    vendor: vendor,
+                    description: desc,
+                    cost: cost,
+                    fileData: fileData,
+                    fileName: fileName,
+                    fileType: fileType
+                });
+            }
+
+            scriptRunner.withSuccessHandler(function(response) {
+                document.getElementById('work-log-form').reset();
+                document.getElementById('log-date').valueAsDate = new Date();
+                bypassPropertyWarning = false;
+                
+                document.getElementById('materials-container').innerHTML = `<p id="no-materials-msg" class="text-sm text-gray-400 italic text-center py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">No materials added. Click 'Add Item' if you purchased supplies.</p>`;
+                materialCount = 0;
+
+                btn.innerHTML = originalBtnHTML;
+                btn.disabled = false;
+
+                showToast('Success!', 'Work log & receipt uploaded successfully.', 'success');
+            }).submitWorkLog(payload);
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function showToast(title, desc, type) {
+            const toast = document.getElementById('toast-message');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-desc').innerText = desc;
+            
+            const icon = document.getElementById('toast-icon');
+            icon.className = (type === 'success') ? 'fas fa-check-circle text-green-400 text-2xl' : 'fas fa-exclamation-circle text-red-400 text-2xl';
+
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-full', 'opacity-0'), 3500);
+        }
+    </script>
+</body>
+</html>
