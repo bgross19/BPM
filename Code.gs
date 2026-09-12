@@ -11,6 +11,12 @@ function doGet(e) {
   return htmlOutput;
 }
 
+// 1.5 INCLUDE HTML FILES
+// Helper function to include HTML files in the main Index.html file
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
 // 2. GET USER ROLE (Passed to frontend on load)
 // Checks the active Google account against 'dim_Employees' sheet to return user details.
 function getUserRole() {
@@ -90,11 +96,27 @@ function getDropdownData() {
 function getOrCreateReceiptsFolder() {
   // [ACTION_REQUIRED]: Update with preferred folder name if different
   var folderName = "BPM Material Receipts";
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty('RECEIPTS_FOLDER_ID');
+
+  if (folderId) {
+    try {
+      return DriveApp.getFolderById(folderId);
+    } catch (e) {
+      // Folder might have been deleted, proceed to search by name
+    }
+  }
+
   var folders = DriveApp.getFoldersByName(folderName);
   if (folders.hasNext()) {
-    return folders.next();
+    var folder = folders.next();
+    props.setProperty('RECEIPTS_FOLDER_ID', folder.getId());
+    return folder;
   }
-  return DriveApp.createFolder(folderName);
+
+  var newFolder = DriveApp.createFolder(folderName);
+  props.setProperty('RECEIPTS_FOLDER_ID', newFolder.getId());
+  return newFolder;
 }
 
 // 3. SUBMIT WORK LOG TO SHEETS
@@ -253,7 +275,9 @@ function getEmployeeWorkLogs() {
 
 // 3.6 UPDATE EXISTING WORK LOG
 function updateWorkLog(payload) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000); // Wait up to 10 seconds for other processes to finish
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
@@ -265,6 +289,7 @@ function updateWorkLog(payload) {
     var values = range.getValues();
 
     var updated = false;
+    var rowToUpdate = -1;
     for (var i = 0; i < values.length; i++) {
       var id = (values[i][0] || '').toString().trim();
       if (id === payload.workLogId) {
@@ -273,27 +298,38 @@ function updateWorkLog(payload) {
           throw new Error("Cannot edit a punch that has already been marked as Paid.");
         }
 
-        laborSheet.getRange(i + 2, 3).setValue(payload.date);       // Date_Completed
-        laborSheet.getRange(i + 2, 5).setValue(payload.propertyId); // Property_ID
-        laborSheet.getRange(i + 2, 6).setValue(payload.taskId);     // Task_ID
-        laborSheet.getRange(i + 2, 7).setValue(payload.hours);      // Hours_Worked
-        laborSheet.getRange(i + 2, 8).setValue(payload.notes);      // Work_Notes
-        updated = true;
+        rowToUpdate = i + 2;
         break;
       }
     }
 
-    if (!updated) throw new Error("Work log entry not found.");
+    if (rowToUpdate === -1) throw new Error("Work log entry not found.");
+
+    // Update only the specific row to prevent lost updates
+    var updatedRowRange = laborSheet.getRange(rowToUpdate, 3, 1, 6); // Col 3 (Date) to Col 8 (Notes)
+    var updatedRowData = [[
+      payload.date,       // Date_Completed
+      values[rowToUpdate - 2][3], // Preserve Employee_ID (Col 4, index 3 in values)
+      payload.propertyId, // Property_ID
+      payload.taskId,     // Task_ID
+      payload.hours,      // Hours_Worked
+      payload.notes       // Work_Notes
+    ]];
+    updatedRowRange.setValues(updatedRowData);
 
     return { success: true, message: "Punch updated successfully" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 // 3.7 WORK LOG APPROVAL WORKFLOW FUNCTION
 function updateApprovalStatus(workLogId, newStatus) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
@@ -301,23 +337,28 @@ function updateApprovalStatus(workLogId, newStatus) {
     var lastRow = laborSheet.getLastRow();
     if (lastRow <= 1) throw new Error("No work logs found.");
 
-    var range = laborSheet.getRange(2, 1, lastRow - 1, 10);
+    var range = laborSheet.getRange(2, 1, lastRow - 1, 1); // Only fetch the ID column for faster search
     var values = range.getValues();
 
-    var updated = false;
+    var rowToUpdate = -1;
     for (var i = 0; i < values.length; i++) {
       var id = (values[i][0] || '').toString().trim();
       if (id === workLogId) {
-        laborSheet.getRange(i + 2, 9).setValue(newStatus); // Column I: Payroll_Status / Approval Status
-        updated = true;
+        rowToUpdate = i + 2;
         break;
       }
     }
 
-    if (!updated) throw new Error("Work log entry not found.");
+    if (rowToUpdate === -1) throw new Error("Work log entry not found.");
+
+    // Update only the specific cell
+    laborSheet.getRange(rowToUpdate, 9).setValue(newStatus); // Column I: Payroll_Status / Approval Status
+
     return { success: true, message: "Work log status updated to " + newStatus };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -546,28 +587,44 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
 // 5. UPDATE PAYROLL STATUS TO PAID
 function markPayrollPaid(employeeId) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
     var lastRow = laborSheet.getLastRow();
+
     if (lastRow > 1) {
-      var range = laborSheet.getRange(2, 1, lastRow - 1, 10);
+      var range = laborSheet.getRange(2, 9, lastRow - 1, 1); // Get only the Payroll_Status column
       var values = range.getValues();
 
+      var empRange = laborSheet.getRange(2, 4, lastRow - 1, 1); // Get Employee_ID column
+      var empValues = empRange.getValues();
+
+      var updated = false;
+
       for (var i = 0; i < values.length; i++) {
-        var empIdInRow = (values[i][3] || '').toString().trim();
-        var status = (values[i][8] || '').toString().trim().toLowerCase();
+        var empIdInRow = (empValues[i][0] || '').toString().trim();
+        var status = (values[i][0] || '').toString().trim().toLowerCase();
 
         if ((!employeeId || empIdInRow === employeeId) && (status === 'pending' || status === 'approved')) {
-          laborSheet.getRange(i + 2, 9).setValue('Paid'); // Column I: Payroll_Status
+          values[i][0] = 'Paid';
+          updated = true;
         }
+      }
+
+      // Perform one bulk update on the single column
+      if (updated) {
+        range.setValues(values);
       }
     }
     return { success: true, message: 'Payroll marked as Paid successfully.' };
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -609,22 +666,43 @@ function generateInvoiceReport(propertyId) {
 
 // 7. MARK PROPERTY INVOICE AS BILLED
 function markPropertyBilled(propertyId) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      var range = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 10);
+      var lastRow = laborSheet.getLastRow();
+
+      var range = laborSheet.getRange(2, 10, lastRow - 1, 1); // Get only the Billing_Status column
       var values = range.getValues();
+
+      var propRange = laborSheet.getRange(2, 5, lastRow - 1, 1); // Get Property_ID column
+      var propValues = propRange.getValues();
+
+      var updated = false;
+
       for (var i = 0; i < values.length; i++) {
-        if (values[i][4] === propertyId && (values[i][9] || '').toString().toLowerCase() === 'unbilled') {
-          laborSheet.getRange(i + 2, 10).setValue('Billed'); // Column J: Billing_Status
+        var propIdInRow = (propValues[i][0] || '').toString().trim();
+        var status = (values[i][0] || '').toString().trim().toLowerCase();
+
+        if (propIdInRow === propertyId && status === 'unbilled') {
+          values[i][0] = 'Billed';
+          updated = true;
         }
+      }
+
+      // Perform one bulk update on the single column
+      if (updated) {
+        range.setValues(values);
       }
     }
     return { success: true, message: 'Property billing status updated to Billed.' };
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -715,9 +793,12 @@ function exportInvoicePDF(propertyId) {
     // Encode PDF bytes to base64 for browser client download
     var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
 
+    // Trash the temporary doc
+    docFile.setTrashed(true);
+
     return {
       success: true,
-      docUrl: docFile.getUrl(),
+      docUrl: docFile.getUrl(), // Might be inaccessible since trashed, but leaving for legacy reasons
       pdfUrl: pdfFile.getUrl(),
       fileName: docTitle + ".pdf",
       base64Pdf: base64Pdf
