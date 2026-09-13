@@ -43,7 +43,13 @@ function getUserRole() {
           userInfo.employeeId = row[0]; // Column A: Employee_ID
           userInfo.name = row[1];       // Column B: Full_Name
           var roleInSheet = (row[4] || '').toString().trim().toLowerCase(); // Column E: Role
-          userInfo.role = (roleInSheet.indexOf('admin') > -1) ? 'admin' : 'employee';
+          if (roleInSheet.indexOf('owner') > -1 || roleInSheet.indexOf('executive') > -1) {
+              userInfo.role = 'owner';
+          } else if (roleInSheet.indexOf('admin') > -1) {
+              userInfo.role = 'admin';
+          } else {
+              userInfo.role = 'employee';
+          }
           break;
         }
       }
@@ -1620,5 +1626,312 @@ function deleteBillingRate(rateId) {
     throw new Error("Rate ID not found");
   } catch (error) {
     return { success: false, error: error.message };
+  }
+}
+
+// 13. GET EXECUTIVE DASHBOARD DATA
+function getExecutiveDashboardData(startDateStr, endDateStr) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+
+    // 1. RENT METRICS
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
+
+    var totalRentBilledPeriod = 0;
+    var totalRentCollectedPeriod = 0;
+    var totalRentOutstanding = 0;
+
+    var arRent = [];
+
+    var leases = [];
+    if (leaseSheet && leaseSheet.getLastRow() > 1) {
+      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+      leases = leaseData.map(function(row) {
+        return {
+          leaseId: row[0],
+          propertyId: row[1],
+          startDate: new Date(row[2]),
+          endDate: new Date(row[3]),
+          monthlyRent: parseFloat(row[4]) || 0,
+          status: row[6]
+        };
+      });
+    }
+
+    leases.forEach(function(lease) {
+      var expectedInPeriod = 0;
+      var d = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (d <= endDate) {
+        var endOfThisMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        if (lease.startDate <= endOfThisMonth && lease.endDate >= d) {
+           expectedInPeriod += lease.monthlyRent;
+        }
+        d.setMonth(d.getMonth() + 1);
+      }
+      totalRentBilledPeriod += expectedInPeriod;
+    });
+
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
+      ledgerData.forEach(function(row) {
+        var lDate = new Date(row[3]);
+        if (lDate >= startDate && lDate <= endDate) {
+           totalRentCollectedPeriod += parseFloat(row[6]) || 0;
+        }
+      });
+    }
+
+    leases.forEach(function(lease) {
+       var balanceData = calculateLeaseBalance(lease.leaseId);
+       if (balanceData.success && balanceData.balance > 0) {
+           totalRentOutstanding += balanceData.balance;
+
+           var today = new Date();
+           var daysOverdue = 0;
+           var monthsBehind = Math.floor(balanceData.balance / lease.monthlyRent);
+
+           if (monthsBehind > 0 || today.getDate() > 5) {
+               if (monthsBehind === 0 && today.getDate() > 5) {
+                   daysOverdue = today.getDate() - 5;
+               } else if (monthsBehind > 0) {
+                   daysOverdue = (monthsBehind * 30) + (today.getDate() > 5 ? today.getDate() - 5 : 0);
+               }
+           }
+
+           if (balanceData.balance > 0 && daysOverdue > 0) {
+               arRent.push({
+                   type: 'Rent',
+                   id: lease.leaseId,
+                   propertyId: lease.propertyId,
+                   amount: balanceData.balance,
+                   daysOverdue: daysOverdue
+               });
+           }
+       }
+    });
+
+    // 2. MAINTENANCE METRICS
+    var totalMaintBilledPeriod = 0;
+    var totalMaintCollectedPeriod = 0;
+    var totalMaintOutstanding = 0;
+    var arMaint = [];
+
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var ratesSheet = ss.getSheetByName('dim_Billing_Rates');
+
+    var rateMap = {};
+    if (ratesSheet && ratesSheet.getLastRow() > 1) {
+      var ratesData = ratesSheet.getRange(2, 1, ratesSheet.getLastRow() - 1, 6).getValues();
+      ratesData.forEach(function(row) {
+        var taskId = (row[1] || '').toString().trim();
+        var empId = (row[3] || '').toString().trim();
+        var rate = parseFloat(row[5]) || 0;
+        if (taskId && empId) { rateMap[taskId + '_' + empId] = rate; }
+      });
+    }
+
+    var logs = [];
+    var materials = [];
+
+    if (laborSheet && laborSheet.getLastRow() > 1) {
+      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+      laborData.forEach(function(row) {
+        var empId = (row[3] || '').toString().trim();
+        var taskId = (row[5] || '').toString().trim();
+        var hours = parseFloat(row[6]) || 0;
+        var logDate = new Date(row[2]);
+        var billingStatus = (row[9] || '').toString().trim();
+        var chargeTarget = (row[10] || 'Owner').toString().trim();
+
+        var billableRate = rateMap[taskId + '_' + empId] !== undefined ? rateMap[taskId + '_' + empId] : (rateMap[taskId + '_DEFAULT'] !== undefined ? rateMap[taskId + '_DEFAULT'] : 0);
+        var billableAmount = hours * billableRate;
+
+        if (chargeTarget === 'Owner') {
+          logs.push({
+            workLogId: row[0],
+            date: logDate,
+            propertyId: row[4],
+            billableAmount: billableAmount,
+            billingStatus: billingStatus
+          });
+        }
+      });
+    }
+
+    if (matSheet && matSheet.getLastRow() > 1) {
+      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+      matData.forEach(function(row) {
+        materials.push({
+          expenseId: row[0],
+          workLogId: row[1],
+          propertyId: row[2],
+          cost: parseFloat(row[5]) || 0
+        });
+      });
+    }
+
+    var propertyArMap = {};
+
+    logs.forEach(function(log) {
+       var matCostForLog = materials.filter(function(m) { return m.workLogId === log.workLogId; }).reduce(function(sum, m) { return sum + m.cost; }, 0);
+       var totalCost = log.billableAmount + matCostForLog;
+
+       if (log.date >= startDate && log.date <= endDate) {
+           if (log.billingStatus === 'Billed' || log.billingStatus === 'Paid') {
+               totalMaintBilledPeriod += totalCost;
+           }
+           if (log.billingStatus === 'Paid') {
+               totalMaintCollectedPeriod += totalCost;
+           }
+       }
+
+       if (log.billingStatus === 'Billed') {
+           totalMaintOutstanding += totalCost;
+
+           var today = new Date();
+           var daysOverdue = Math.floor((today - log.date) / (1000 * 60 * 60 * 24));
+
+           if (!propertyArMap[log.propertyId]) {
+               propertyArMap[log.propertyId] = { amount: 0, daysOverdue: 0 };
+           }
+           propertyArMap[log.propertyId].amount += totalCost;
+           propertyArMap[log.propertyId].daysOverdue = Math.max(propertyArMap[log.propertyId].daysOverdue, daysOverdue);
+       }
+    });
+
+    for (var prop in propertyArMap) {
+        arMaint.push({
+            type: 'Maintenance',
+            id: 'INV-' + prop,
+            propertyId: prop,
+            amount: propertyArMap[prop].amount,
+            daysOverdue: propertyArMap[prop].daysOverdue
+        });
+    }
+
+    // 3. OVERALL CASH FLOW
+    var totalCashIn = totalRentCollectedPeriod + totalMaintCollectedPeriod;
+    var totalCashOut = 0;
+    var totalPayrollPaidPeriod = 0;
+
+    var empSheet = ss.getSheetByName('dim_Employees');
+    var employeeMap = {};
+    if (empSheet && empSheet.getLastRow() > 1) {
+      var empData = empSheet.getRange(2, 1, empSheet.getLastRow() - 1, 7).getValues();
+      empData.forEach(function(row) {
+        employeeMap[row[0]] = parseFloat(row[3]) || 0;
+      });
+    }
+
+    if (laborSheet && laborSheet.getLastRow() > 1) {
+      var laborDataFull = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+      laborDataFull.forEach(function(row) {
+        var empId = (row[3] || '').toString().trim();
+        var hours = parseFloat(row[6]) || 0;
+        var logDate = new Date(row[2]);
+        var payrollStatus = (row[8] || '').toString().trim();
+
+        var grossPay = hours * (employeeMap[empId] || 0);
+
+        if (logDate >= startDate && logDate <= endDate && payrollStatus === 'Paid') {
+            totalPayrollPaidPeriod += grossPay;
+        }
+      });
+    }
+
+    var totalMaterialsPeriod = 0;
+    if (matSheet && matSheet.getLastRow() > 1) {
+        var workLogDates = {};
+        if (laborSheet && laborSheet.getLastRow() > 1) {
+            laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 3).getValues().forEach(function(row) {
+                workLogDates[row[0]] = new Date(row[2]);
+            });
+        }
+
+        materials.forEach(function(mat) {
+            var mDate = workLogDates[mat.workLogId];
+            if (mDate && mDate >= startDate && mDate <= endDate) {
+                totalMaterialsPeriod += mat.cost;
+            }
+        });
+    }
+
+    totalCashOut = totalPayrollPaidPeriod + totalMaterialsPeriod;
+    var netProfit = totalCashIn - totalCashOut;
+
+    var arTable = arRent.concat(arMaint);
+    arTable.sort(function(a, b) {
+        return b.daysOverdue - a.daysOverdue;
+    });
+
+    return {
+      success: true,
+      data: {
+          rent: {
+              billed: totalRentBilledPeriod,
+              collected: totalRentCollectedPeriod,
+              outstanding: totalRentOutstanding
+          },
+          maintenance: {
+              billed: totalMaintBilledPeriod,
+              collected: totalMaintCollectedPeriod,
+              outstanding: totalMaintOutstanding
+          },
+          financials: {
+              cashIn: totalCashIn,
+              cashOut: totalCashOut,
+              netProfit: netProfit
+          },
+          accountsReceivable: arTable
+      }
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// 14. MARK PROPERTY INVOICE AS PAID
+function markPropertyPaid(propertyId) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+
+    if (laborSheet && laborSheet.getLastRow() > 1) {
+      var lastRow = laborSheet.getLastRow();
+
+      var range = laborSheet.getRange(2, 10, lastRow - 1, 1);
+      var values = range.getValues();
+
+      var propRange = laborSheet.getRange(2, 5, lastRow - 1, 1);
+      var propValues = propRange.getValues();
+
+      var updated = false;
+
+      for (var i = 0; i < values.length; i++) {
+        var propIdInRow = (propValues[i][0] || '').toString().trim();
+        var status = (values[i][0] || '').toString().trim().toLowerCase();
+
+        if (propIdInRow === propertyId && status === 'billed') {
+          values[i][0] = 'Paid';
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        range.setValues(values);
+      }
+    }
+    return { success: true, message: 'Property billing status updated to Paid.' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
