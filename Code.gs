@@ -202,6 +202,348 @@ function submitWorkLog(payload) {
   }
 }
 
+// 13. SETTLEMENT CALCULATIONS
+
+function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (managementFeePercent === undefined) managementFeePercent = 8.0;
+
+    // Determine start and end dates from monthYear ("YYYY-MM")
+    var parts = monthYear.split('-');
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1; // 0-indexed month
+
+    var startDate = new Date(year, month, 1);
+    var endDate = new Date(year, month + 1, 0, 23, 59, 59); // Last day of month
+
+    var startDateStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var endDateStr = Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    // 1. Get Leases for Property
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    var propertyLeaseIds = {};
+    if (leaseSheet && leaseSheet.getLastRow() > 1) {
+      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 2).getValues();
+      for (var i = 0; i < leaseData.length; i++) {
+        if (leaseData[i][1] === propertyId) {
+          propertyLeaseIds[leaseData[i][0]] = true;
+        }
+      }
+    }
+
+    // 2. Total Rent Collected
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
+    var totalRentCollected = 0;
+    var rentLedgerItems = [];
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
+      for (var j = 0; j < ledgerData.length; j++) {
+        var l_leaseId = ledgerData[j][1];
+        var l_date = ledgerData[j][3];
+        var l_type = ledgerData[j][4];
+        var l_payment = parseFloat(ledgerData[j][6]) || 0;
+
+        if (propertyLeaseIds[l_leaseId] && l_type === 'Rent' && l_payment > 0) {
+          var logDate = new Date(l_date);
+          if (logDate >= startDate && logDate <= endDate) {
+            totalRentCollected += l_payment;
+            rentLedgerItems.push({
+              date: Utilities.formatDate(logDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+              amount: l_payment,
+              leaseId: l_leaseId
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Management Fee
+    var managementFee = totalRentCollected * (managementFeePercent / 100);
+
+    // 4. Maintenance Billed to Owner
+    var adminData = getAdminPayrollData(startDateStr, endDateStr, 'All');
+    if (!adminData.success) throw new Error(adminData.error);
+
+    var filteredLogs = adminData.workLogs.filter(function(log) {
+      return log.propertyId === propertyId && log.chargeTarget === 'Owner';
+    });
+
+    var ownerWorkLogIds = {};
+    filteredLogs.forEach(function(log) { ownerWorkLogIds[log.workLogId] = true; });
+
+    var filteredMaterials = adminData.materials.filter(function(mat) {
+      if (mat.propertyId !== propertyId) return false;
+      if (mat.workLogId && !ownerWorkLogIds[mat.workLogId]) return false;
+      return true;
+    });
+
+    var totalLaborCost = filteredLogs.reduce(function(sum, log) {
+      return sum + (log.billableAmount !== undefined && log.billableAmount > 0 ? log.billableAmount : log.grossPay);
+    }, 0);
+    var totalMaterialsCost = filteredMaterials.reduce(function(sum, mat) { return sum + mat.cost; }, 0);
+    var totalMaintenance = totalLaborCost + totalMaterialsCost;
+
+    // 5. Net Payout
+    var netPayout = totalRentCollected - managementFee - totalMaintenance;
+
+    return {
+      success: true,
+      settlement: {
+        propertyId: propertyId,
+        monthYear: monthYear,
+        totalRentCollected: totalRentCollected,
+        rentLedgerItems: rentLedgerItems,
+        managementFeePercent: managementFeePercent,
+        managementFeeAmount: managementFee,
+        laborItems: filteredLogs,
+        materialItems: filteredMaterials,
+        totalMaintenanceBilled: totalMaintenance,
+        netPayout: netPayout
+      }
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function generateSecurityDepositSettlement(leaseId) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Get Lease Information
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    if (!leaseSheet) throw new Error("Could not find sheet: fact_Leases");
+
+    var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+    var lease = null;
+    for (var i = 0; i < leaseData.length; i++) {
+      if (leaseData[i][0] === leaseId) {
+        lease = {
+          propertyId: leaseData[i][1],
+          startDate: new Date(leaseData[i][2]),
+          endDate: new Date(leaseData[i][3]),
+          securityDeposit: parseFloat(leaseData[i][5]) || 0
+        };
+        break;
+      }
+    }
+
+    if (!lease) throw new Error("Lease not found for ID: " + leaseId);
+
+    // 2. Unpaid Rent/Late Fees
+    var balanceData = calculateLeaseBalance(leaseId);
+    if (!balanceData.success) throw new Error("Error calculating balance: " + balanceData.error);
+
+    var unpaidRent = Math.max(0, balanceData.balance);
+
+    // 3. Damages / Maintenance (Target = Security Deposit)
+    var extendedEndDate = new Date(lease.endDate);
+    extendedEndDate.setDate(extendedEndDate.getDate() + 30); // 30 days after lease
+
+    var startDateStr = Utilities.formatDate(lease.startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var endDateStr = Utilities.formatDate(extendedEndDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    var adminData = getAdminPayrollData(startDateStr, endDateStr, 'All');
+    if (!adminData.success) throw new Error(adminData.error);
+
+    var filteredLogs = adminData.workLogs.filter(function(log) {
+      return log.propertyId === lease.propertyId && log.chargeTarget === 'Security Deposit';
+    });
+
+    var depositWorkLogIds = {};
+    filteredLogs.forEach(function(log) { depositWorkLogIds[log.workLogId] = true; });
+
+    var filteredMaterials = adminData.materials.filter(function(mat) {
+      if (mat.propertyId !== lease.propertyId) return false;
+      if (mat.workLogId && !depositWorkLogIds[mat.workLogId]) return false;
+      return true;
+    });
+
+    var totalLaborCost = filteredLogs.reduce(function(sum, log) {
+      return sum + (log.billableAmount !== undefined && log.billableAmount > 0 ? log.billableAmount : log.grossPay);
+    }, 0);
+    var totalMaterialsCost = filteredMaterials.reduce(function(sum, mat) { return sum + mat.cost; }, 0);
+    var totalDamages = totalLaborCost + totalMaterialsCost;
+
+    // 4. Net Refund
+    var netRefund = lease.securityDeposit - unpaidRent - totalDamages;
+
+    return {
+      success: true,
+      settlement: {
+        leaseId: leaseId,
+        propertyId: lease.propertyId,
+        securityDeposit: lease.securityDeposit,
+        unpaidRent: unpaidRent,
+        laborItems: filteredLogs,
+        materialItems: filteredMaterials,
+        totalDamages: totalDamages,
+        netRefund: netRefund
+      }
+    };
+
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// 3.5 GET EMPLOYEE WORK LOGS & DAILY TOTALS
+function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
+  try {
+    var report = generateOwnerSettlement(propertyId, monthYear, managementFeePercent);
+    if (!report.success) throw new Error(report.error);
+    var st = report.settlement;
+
+    var docTitle = "Owner Settlement - " + propertyId + " - " + monthYear;
+    var doc = DocumentApp.create(docTitle);
+    var body = doc.getBody();
+
+    var titlePara = body.appendParagraph("MONTHLY OWNER SETTLEMENT");
+    titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    body.appendParagraph("Property: " + st.propertyId);
+    body.appendParagraph("Month/Year: " + st.monthYear);
+    body.appendParagraph("Generated: " + new Date().toLocaleDateString());
+    body.appendParagraph("");
+
+    var rentHeader = body.appendParagraph("Rent Collected");
+    rentHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    if (st.rentLedgerItems && st.rentLedgerItems.length > 0) {
+      var rentTable = [["Date", "Lease ID", "Amount"]];
+      st.rentLedgerItems.forEach(function(item) {
+        rentTable.push([item.date, item.leaseId, "$" + item.amount.toFixed(2)]);
+      });
+      body.appendTable(rentTable);
+    } else {
+      body.appendParagraph("No rent collected this period.");
+    }
+    body.appendParagraph("Total Rent Collected: $" + st.totalRentCollected.toFixed(2));
+    body.appendParagraph("");
+
+    var feeHeader = body.appendParagraph("Management Fee");
+    feeHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    body.appendParagraph("Rate: " + st.managementFeePercent + "%");
+    body.appendParagraph("Fee Amount: $" + st.managementFeeAmount.toFixed(2));
+    body.appendParagraph("");
+
+    var maintHeader = body.appendParagraph("Maintenance & Repairs");
+    maintHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    if (st.laborItems.length > 0 || st.materialItems.length > 0) {
+       body.appendParagraph("Labor:");
+       st.laborItems.forEach(function(log) {
+         var amt = (log.billableAmount !== undefined && log.billableAmount > 0) ? log.billableAmount : log.grossPay;
+         body.appendParagraph("- " + log.dateCompleted + ": " + log.taskId + " (" + log.hoursWorked + " hrs) = $" + amt.toFixed(2));
+       });
+       body.appendParagraph("Materials:");
+       st.materialItems.forEach(function(mat) {
+         body.appendParagraph("- " + mat.vendor + ": " + mat.description + " = $" + mat.cost.toFixed(2));
+       });
+    } else {
+      body.appendParagraph("No maintenance billed this period.");
+    }
+    body.appendParagraph("Total Maintenance: $" + st.totalMaintenanceBilled.toFixed(2));
+    body.appendParagraph("");
+
+    var payoutPara = body.appendParagraph("NET PAYOUT TO OWNER: $" + st.netPayout.toFixed(2));
+    payoutPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+
+    doc.saveAndClose();
+
+    var docFile = DriveApp.getFileById(doc.getId());
+    var pdfBlob = docFile.getAs('application/pdf');
+    pdfBlob.setName(docTitle + ".pdf");
+    var pdfFile = DriveApp.createFile(pdfBlob);
+    var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
+    docFile.setTrashed(true);
+
+    return {
+      success: true,
+      docUrl: docFile.getUrl(),
+      pdfUrl: pdfFile.getUrl(),
+      fileName: docTitle + ".pdf",
+      base64Pdf: base64Pdf
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function exportSecurityDepositSettlementPDF(leaseId) {
+  try {
+    var report = generateSecurityDepositSettlement(leaseId);
+    if (!report.success) throw new Error(report.error);
+    var st = report.settlement;
+
+    var docTitle = "Security Deposit Settlement - " + leaseId;
+    var doc = DocumentApp.create(docTitle);
+    var body = doc.getBody();
+
+    var titlePara = body.appendParagraph("SECURITY DEPOSIT SETTLEMENT");
+    titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    body.appendParagraph("Lease ID: " + st.leaseId);
+    body.appendParagraph("Property: " + st.propertyId);
+    body.appendParagraph("Generated: " + new Date().toLocaleDateString());
+    body.appendParagraph("");
+
+    var depHeader = body.appendParagraph("Security Deposit");
+    depHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    body.appendParagraph("Initial Deposit Held: $" + st.securityDeposit.toFixed(2));
+    body.appendParagraph("");
+
+    var rentHeader = body.appendParagraph("Unpaid Rent & Fees");
+    rentHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    body.appendParagraph("Total Owed: $" + st.unpaidRent.toFixed(2));
+    body.appendParagraph("");
+
+    var maintHeader = body.appendParagraph("Damages & Maintenance Deductions");
+    maintHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    if (st.laborItems.length > 0 || st.materialItems.length > 0) {
+       body.appendParagraph("Labor Deductions:");
+       st.laborItems.forEach(function(log) {
+         var amt = (log.billableAmount !== undefined && log.billableAmount > 0) ? log.billableAmount : log.grossPay;
+         body.appendParagraph("- " + log.dateCompleted + ": " + log.taskId + " (" + log.workNotes + ") = $" + amt.toFixed(2));
+       });
+       body.appendParagraph("Material Deductions:");
+       st.materialItems.forEach(function(mat) {
+         body.appendParagraph("- " + mat.vendor + ": " + mat.description + " = $" + mat.cost.toFixed(2));
+       });
+    } else {
+      body.appendParagraph("No damages recorded.");
+    }
+    body.appendParagraph("Total Damages Deducted: $" + st.totalDamages.toFixed(2));
+    body.appendParagraph("");
+
+    var refPara = body.appendParagraph("NET REFUND TO TENANT: $" + st.netRefund.toFixed(2));
+    refPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+
+    doc.saveAndClose();
+
+    var docFile = DriveApp.getFileById(doc.getId());
+    var pdfBlob = docFile.getAs('application/pdf');
+    pdfBlob.setName(docTitle + ".pdf");
+    var pdfFile = DriveApp.createFile(pdfBlob);
+    var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
+    docFile.setTrashed(true);
+
+    return {
+      success: true,
+      docUrl: docFile.getUrl(),
+      pdfUrl: pdfFile.getUrl(),
+      fileName: docTitle + ".pdf",
+      base64Pdf: base64Pdf
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 // 3.5 GET EMPLOYEE WORK LOGS & DAILY TOTALS
 function getEmployeeWorkLogs() {
   try {

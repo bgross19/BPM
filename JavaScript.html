@@ -116,6 +116,24 @@
                     },
                     markPropertyBilled: function(propId) {
                         setTimeout(() => callback({ success: true, message: 'Property billed' }), 400);
+                    },
+                    generateOwnerSettlement: function(prop, monthYear, fee) {
+                        setTimeout(() => callback({
+                            success: true,
+                            settlement: { propertyId: prop, monthYear: monthYear, totalRentCollected: 2500, managementFeePercent: fee, managementFeeAmount: 2500 * (fee/100), totalMaintenanceBilled: 150, netPayout: 2500 - (2500 * (fee/100)) - 150 }
+                        }), 400);
+                    },
+                    exportOwnerSettlementPDF: function(prop, monthYear, fee) {
+                        setTimeout(() => callback({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'OS.pdf' }), 800);
+                    },
+                    generateSecurityDepositSettlement: function(leaseId) {
+                        setTimeout(() => callback({
+                            success: true,
+                            settlement: { leaseId: leaseId, securityDeposit: 1500, unpaidRent: 200, totalDamages: 100, netRefund: 1200 }
+                        }), 400);
+                    },
+                    exportSecurityDepositSettlementPDF: function(leaseId) {
+                        setTimeout(() => callback({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'SD.pdf' }), 800);
                     }
                 };
             }
@@ -168,6 +186,17 @@
                     switchTab('employee-view');
                 }
             }
+        }
+
+        function switchRentalSubTab(subTabId) {
+            document.getElementById('lease-management-sub').classList.add('hidden');
+            document.getElementById('settlements-sub').classList.add('hidden');
+
+            document.getElementById('tab-lease-management-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
+            document.getElementById('tab-settlements-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
+
+            document.getElementById(subTabId).classList.remove('hidden');
+            document.getElementById(`tab-${subTabId}`).className = "flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center";
         }
 
         function switchTab(tabId) {
@@ -991,12 +1020,17 @@
 
     function populateLeaseDropdown() {
         const select = document.getElementById('ledger-lease-select');
+        const selectSd = document.getElementById('sd-lease-select');
+
         select.innerHTML = '<option value="">-- Select a Lease --</option>';
+        if (selectSd) selectSd.innerHTML = '<option value="">-- Select a Lease --</option>';
+
         globalLeases.forEach(lease => {
             const opt = document.createElement('option');
             opt.value = lease.leaseId;
             opt.textContent = `${lease.propertyId} (${lease.leaseId})`;
-            select.appendChild(opt);
+            select.appendChild(opt.cloneNode(true));
+            if (selectSd) selectSd.appendChild(opt);
         });
     }
 
@@ -1032,6 +1066,137 @@
                 }
             })
             .calculateLeaseBalance(leaseId);
+    }
+
+    function generateOwnerSettlementUI(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-gen-os');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        btn.disabled = true;
+
+        const propertyId = document.getElementById('os-property').value.trim();
+        const monthYear = document.getElementById('os-month').value;
+        const feePercent = parseFloat(document.getElementById('os-fee').value);
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    const st = res.settlement;
+                    document.getElementById('os-out-rent').innerText = `$${st.totalRentCollected.toFixed(2)}`;
+                    document.getElementById('os-out-fee-rate').innerText = st.managementFeePercent;
+                    document.getElementById('os-out-fee').innerText = `-$${st.managementFeeAmount.toFixed(2)}`;
+                    document.getElementById('os-out-maint').innerText = `-$${st.totalMaintenanceBilled.toFixed(2)}`;
+                    document.getElementById('os-out-payout').innerText = `$${st.netPayout.toFixed(2)}`;
+
+                    document.getElementById('os-display').classList.remove('hidden');
+                    document.getElementById('os-links-container').classList.add('hidden');
+                    showToast('Success', 'Owner settlement generated.', 'success');
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .generateOwnerSettlement(propertyId, monthYear, feePercent);
+    }
+
+    function exportOS() {
+        const btn = document.getElementById('btn-export-os');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin text-red-500"></i> Exporting...';
+        btn.disabled = true;
+
+        const propertyId = document.getElementById('os-property').value.trim();
+        const monthYear = document.getElementById('os-month').value;
+        const feePercent = parseFloat(document.getElementById('os-fee').value);
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    document.getElementById('os-link-doc').href = res.docUrl;
+                    document.getElementById('os-link-pdf').href = res.pdfUrl;
+                    document.getElementById('os-links-container').classList.remove('hidden');
+
+                    if(res.base64Pdf) {
+                        const dl = document.createElement('a');
+                        dl.href = 'data:application/pdf;base64,' + res.base64Pdf;
+                        dl.download = res.fileName;
+                        document.body.appendChild(dl);
+                        dl.click();
+                        document.body.removeChild(dl);
+                    }
+                    showToast('Success', 'PDF exported successfully.', 'success');
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .exportOwnerSettlementPDF(propertyId, monthYear, feePercent);
+    }
+
+    function generateSDSettlementUI(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-gen-sd');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        btn.disabled = true;
+
+        const leaseId = document.getElementById('sd-lease-select').value;
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    const st = res.settlement;
+                    document.getElementById('sd-out-dep').innerText = `$${st.securityDeposit.toFixed(2)}`;
+                    document.getElementById('sd-out-rent').innerText = `-$${st.unpaidRent.toFixed(2)}`;
+                    document.getElementById('sd-out-dmg').innerText = `-$${st.totalDamages.toFixed(2)}`;
+                    document.getElementById('sd-out-refund').innerText = `$${st.netRefund.toFixed(2)}`;
+
+                    document.getElementById('sd-display').classList.remove('hidden');
+                    document.getElementById('sd-links-container').classList.add('hidden');
+                    showToast('Success', 'Security deposit settlement generated.', 'success');
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .generateSecurityDepositSettlement(leaseId);
+    }
+
+    function exportSD() {
+        const btn = document.getElementById('btn-export-sd');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin text-red-500"></i> Exporting...';
+        btn.disabled = true;
+
+        const leaseId = document.getElementById('sd-lease-select').value;
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    document.getElementById('sd-link-doc').href = res.docUrl;
+                    document.getElementById('sd-link-pdf').href = res.pdfUrl;
+                    document.getElementById('sd-links-container').classList.remove('hidden');
+
+                    if(res.base64Pdf) {
+                        const dl = document.createElement('a');
+                        dl.href = 'data:application/pdf;base64,' + res.base64Pdf;
+                        dl.download = res.fileName;
+                        document.body.appendChild(dl);
+                        dl.click();
+                        document.body.removeChild(dl);
+                    }
+                    showToast('Success', 'PDF exported successfully.', 'success');
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .exportSecurityDepositSettlementPDF(leaseId);
     }
 
     function submitLedgerEntry(e) {

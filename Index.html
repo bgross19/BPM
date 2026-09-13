@@ -54,7 +54,7 @@
                     <i class="fas fa-file-invoice-dollar mr-1"></i> Payroll & Billing
                 </button>
                 <button onclick="switchTab('lease-view')" id="tab-lease-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
-                    <i class="fas fa-home mr-1"></i> Lease Management
+                    <i class="fas fa-home mr-1"></i> Rentals
                 </button>
                 <button onclick="switchTab('settings-view')" id="tab-settings-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-cog mr-1"></i> Settings
@@ -167,8 +167,20 @@
                 </div>
             </div>
 
-            <!-- ADMIN VIEW: LEASE MANAGEMENT -->
+            <!-- ADMIN VIEW: RENTALS (Lease Management & Settlements) -->
             <div id="lease-view" class="hidden space-y-6">
+                <!-- Rentals Sub-Navigation -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-2xl mx-auto flex space-x-2">
+                    <button onclick="switchRentalSubTab('lease-management-sub')" id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+                        Lease Management
+                    </button>
+                    <button onclick="switchRentalSubTab('settlements-sub')" id="tab-settlements-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                        Settlements
+                    </button>
+                </div>
+
+                <!-- SUB-VIEW: LEASE MANAGEMENT -->
+                <div id="lease-management-sub" class="space-y-6">
                 <!-- Create Lease Form -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                     <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-file-contract text-blue-600 mr-2"></i>Create New Lease</h2>
@@ -286,6 +298,104 @@
                         </div>
                     </form>
                 </div>
+                </div> <!-- END LEASE MANAGEMENT SUB -->
+
+                <!-- SUB-VIEW: SETTLEMENTS -->
+                <div id="settlements-sub" class="hidden space-y-6">
+                    <!-- Owner Settlement Generator -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
+                        <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-hand-holding-usd text-blue-600 mr-2"></i>Monthly Owner Settlement</h2>
+
+                        <form id="owner-settlement-form" onsubmit="generateOwnerSettlementUI(event)" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Property</label>
+                                    <input type="text" id="os-property" list="property-list" autocomplete="off" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Month/Year</label>
+                                    <input type="month" id="os-month" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Mgmt Fee %</label>
+                                    <input type="number" id="os-fee" step="0.1" min="0" value="8.0" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                </div>
+                            </div>
+                            <div class="flex justify-end pt-2">
+                                <button type="submit" id="btn-gen-os" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all">
+                                    Generate View
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Generated Owner Settlement Display -->
+                        <div id="os-display" class="hidden mt-6 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-gray-800">Settlement Preview</h3>
+                                <button onclick="exportOS()" id="btn-export-os" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
+                                    <i class="fas fa-file-pdf text-red-500"></i> Export to PDF
+                                </button>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm space-y-3">
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Rent Collected:</span><span id="os-out-rent" class="font-medium">$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Management Fee (<span id="os-out-fee-rate"></span>%):</span><span id="os-out-fee" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Maintenance Billed:</span><span id="os-out-maint" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between pt-2"><span class="font-bold text-gray-900">Net Payout to Owner:</span><span id="os-out-payout" class="font-bold text-green-700 text-lg">$0.00</span></div>
+                            </div>
+                            <!-- Export Links -->
+                            <div id="os-links-container" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs space-y-1">
+                                <p class="font-semibold text-blue-800"><i class="fas fa-check-circle mr-1"></i> Exported Successfully!</p>
+                                <div class="flex gap-4 pt-1">
+                                    <a id="os-link-doc" href="#" target="_blank" class="text-blue-600 hover:underline font-medium"><i class="fas fa-file-word mr-1"></i> Open Google Doc</a>
+                                    <a id="os-link-pdf" href="#" target="_blank" class="text-blue-600 hover:underline font-medium"><i class="fas fa-file-pdf mr-1"></i> View PDF</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Deposit Settlement Generator -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
+                        <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-shield-alt text-purple-600 mr-2"></i>Security Deposit Settlement</h2>
+
+                        <form id="sd-settlement-form" onsubmit="generateSDSettlementUI(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Select Lease</label>
+                                <select id="sd-lease-select" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                                    <option value="">-- Select a Lease --</option>
+                                </select>
+                            </div>
+                            <div class="flex justify-end pt-2">
+                                <button type="submit" id="btn-gen-sd" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all">
+                                    Generate View
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Generated SD Settlement Display -->
+                        <div id="sd-display" class="hidden mt-6 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-gray-800">Settlement Preview</h3>
+                                <button onclick="exportSD()" id="btn-export-sd" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
+                                    <i class="fas fa-file-pdf text-red-500"></i> Export to PDF
+                                </button>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm space-y-3">
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Initial Deposit Held:</span><span id="sd-out-dep" class="font-medium">$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Unpaid Rent/Late Fees:</span><span id="sd-out-rent" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Damages Deducted:</span><span id="sd-out-dmg" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between pt-2"><span class="font-bold text-gray-900">Net Refund to Tenant:</span><span id="sd-out-refund" class="font-bold text-purple-700 text-lg">$0.00</span></div>
+                            </div>
+                            <!-- Export Links -->
+                            <div id="sd-links-container" class="hidden mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs space-y-1">
+                                <p class="font-semibold text-purple-800"><i class="fas fa-check-circle mr-1"></i> Exported Successfully!</p>
+                                <div class="flex gap-4 pt-1">
+                                    <a id="sd-link-doc" href="#" target="_blank" class="text-purple-600 hover:underline font-medium"><i class="fas fa-file-word mr-1"></i> Open Google Doc</a>
+                                    <a id="sd-link-pdf" href="#" target="_blank" class="text-purple-600 hover:underline font-medium"><i class="fas fa-file-pdf mr-1"></i> View PDF</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- END SETTLEMENTS SUB -->
             </div>
 
             <!-- ADMIN VIEW: PAYROLL & BILLING DASHBOARD -->
