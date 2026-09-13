@@ -141,6 +141,7 @@
         const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
         window.onload = function() {
+            initRentTracking();
             scriptRunner.withSuccessHandler(populateDatalists).getDropdownData();
             scriptRunner.withSuccessHandler(function(userInfo) {
                 if(userInfo && userInfo.name) {
@@ -204,9 +205,11 @@
         function switchRentalSubTab(subTabId) {
             document.getElementById('lease-management-sub').classList.add('hidden');
             document.getElementById('settlements-sub').classList.add('hidden');
+            document.getElementById('rent-tracking-sub').classList.add('hidden');
 
             document.getElementById('tab-lease-management-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
             document.getElementById('tab-settlements-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
+            document.getElementById('tab-rent-tracking-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
 
             document.getElementById(subTabId).classList.remove('hidden');
             document.getElementById(`tab-${subTabId}`).className = "flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center";
@@ -1347,6 +1350,10 @@
             .exportSecurityDepositSettlementPDF(leaseId);
     }
 
+    function closeRentPaymentModal() {
+        document.getElementById('rent-payment-modal').classList.add('hidden');
+    }
+
     function submitLedgerEntry(e) {
         e.preventDefault();
 
@@ -1387,3 +1394,180 @@
             .recordLedgerEntry(payload);
     }
 </script>
+    let currentRentRollData = [];
+    let currentRentRollYear = new Date().getFullYear();
+
+    function initRentTracking() {
+        const yearSelect = document.getElementById('rt-year-filter');
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+            yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+        }
+        loadRentTrackingData();
+    }
+
+    function loadRentTrackingData() {
+        const year = document.getElementById('rt-year-filter').value;
+        currentRentRollYear = parseInt(year);
+        const tbody = document.getElementById('rent-tracking-tbody');
+        tbody.innerHTML = '<tr><td colspan="17" class="text-center py-4 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading rent roll data...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if(res.success) {
+                    currentRentRollData = res.data;
+                    renderRentTrackingTable();
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .getRentRollData(currentRentRollYear);
+    }
+
+    function filterRentTrackingTable() {
+        renderRentTrackingTable();
+    }
+
+    let rtSortCol = -1;
+    let rtSortAsc = true;
+    function sortRentTracking(colIndex) {
+        if (rtSortCol === colIndex) {
+            rtSortAsc = !rtSortAsc;
+        } else {
+            rtSortCol = colIndex;
+            rtSortAsc = true;
+        }
+        renderRentTrackingTable();
+    }
+
+    function renderRentTrackingTable() {
+        const tbody = document.getElementById('rent-tracking-tbody');
+        const ownerFilter = document.getElementById('rt-owner-filter').value.toLowerCase();
+        const addressFilter = document.getElementById('rt-address-filter').value.toLowerCase();
+
+        let filteredData = currentRentRollData.filter(r => {
+            const matchOwner = !ownerFilter || (r.owner && r.owner.toLowerCase().includes(ownerFilter));
+            const matchAddress = !addressFilter || (r.address && r.address.toLowerCase().includes(addressFilter));
+            return matchOwner && matchAddress;
+        });
+
+        if (rtSortCol !== -1) {
+            filteredData.sort((a, b) => {
+                let valA, valB;
+                if (rtSortCol === 0) { valA = a.property; valB = b.property; }
+                else if (rtSortCol === 1) { valA = a.owner; valB = b.owner; }
+                else if (rtSortCol === 2) { valA = a.address; valB = b.address; }
+                else if (rtSortCol === 3) { valA = a.tenantName; valB = b.tenantName; }
+
+                if (valA < valB) return rtSortAsc ? -1 : 1;
+                if (valA > valB) return rtSortAsc ? 1 : -1;
+                return 0;
+            });
+        }
+
+        tbody.innerHTML = '';
+        if (filteredData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="17" class="text-center py-4 text-gray-500">No rent data found for criteria.</td></tr>';
+            return;
+        }
+
+        filteredData.forEach(row => {
+            let tr = document.createElement('tr');
+            tr.className = "hover:bg-gray-50 transition-colors";
+
+            let html = `
+                <td class="p-3 text-gray-800 font-medium">${row.property}</td>
+                <td class="p-3 text-gray-600">${row.owner}</td>
+                <td class="p-3 text-gray-600">${row.address}</td>
+                <td class="p-3 text-gray-800">${row.tenantName}</td>
+                <td class="p-3 text-right font-medium text-gray-900">$${(row.expectedRent||0).toFixed(2)}</td>
+            `;
+
+            for(let m=0; m<12; m++) {
+                if (!row.activeMonths[m]) {
+                    html += `<td class="p-3 text-center bg-gray-100 text-gray-400 text-xs">-</td>`;
+                } else {
+                    const paid = row.payments[m] || 0;
+                    const expected = row.expectedRent || 0;
+
+                    let bgClass = "bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer border border-red-100"; // Unpaid
+                    let icon = `<i class="fas fa-times-circle"></i>`;
+                    let diffText = ``;
+
+                    if (paid >= expected && expected > 0) {
+                        bgClass = "bg-green-50 hover:bg-green-100 text-green-700 cursor-pointer border border-green-100";
+                        icon = `<i class="fas fa-check-circle"></i>`;
+                    } else if (paid > 0) {
+                        bgClass = "bg-yellow-50 hover:bg-yellow-100 text-yellow-700 cursor-pointer border border-yellow-100";
+                        icon = `<i class="fas fa-exclamation-circle"></i>`;
+                        diffText = `<br><span class="text-[10px]">-$${(expected-paid).toFixed(2)}</span>`;
+                    }
+
+                    const monthName = new Date(currentRentRollYear, m, 1).toLocaleString('default', { month: 'short' });
+
+                    html += `<td class="p-1 text-center">
+                        <div class="h-full w-full rounded p-1.5 flex flex-col items-center justify-center ${bgClass}"
+                             onclick="openRentPaymentModal('${row.leaseId}', '${row.tenantId}', '${row.property}', '${row.tenantName}', ${m}, ${expected})">
+                             <div class="font-medium">$${paid.toFixed(0)}</div>
+                             ${diffText}
+                        </div>
+                    </td>`;
+                }
+            }
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function openRentPaymentModal(leaseId, tenantId, propertyName, tenantName, monthIndex, expectedRent) {
+        document.getElementById('rt-lease-id').value = leaseId;
+        document.getElementById('rt-tenant-id').value = tenantId;
+        document.getElementById('rt-month').value = monthIndex;
+        document.getElementById('rt-year').value = currentRentRollYear;
+
+        const monthName = new Date(currentRentRollYear, monthIndex, 1).toLocaleString('default', { month: 'long' });
+
+        document.getElementById('rt-tenant-prop-desc').innerHTML = `<strong>${tenantName}</strong> at <strong>${propertyName}</strong><br><span class="text-xs text-gray-500">Rent for ${monthName} ${currentRentRollYear}</span>`;
+
+        document.getElementById('rt-payment-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('rt-payment-amount').value = expectedRent.toFixed(2);
+        document.getElementById('rt-payment-mode').value = "";
+        document.getElementById('rt-payment-notes').value = `Rent payment for ${monthName} ${currentRentRollYear}`;
+
+        document.getElementById('rent-payment-modal').classList.remove('hidden');
+    }
+
+    function submitRentTrackingPayment(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submit-rt-payment-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
+        const payload = {
+            leaseId: document.getElementById('rt-lease-id').value,
+            tenantId: document.getElementById('rt-tenant-id').value,
+            date: document.getElementById('rt-payment-date').value,
+            transactionType: 'Rent',
+            chargeAmount: 0,
+            paymentAmount: parseFloat(document.getElementById('rt-payment-amount').value),
+            paymentMode: document.getElementById('rt-payment-mode').value,
+            notes: document.getElementById('rt-payment-notes').value,
+            rentMonth: parseInt(document.getElementById('rt-month').value),
+            rentYear: parseInt(document.getElementById('rt-year').value)
+        };
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    showToast("Success", "Rent payment recorded.");
+                    closeRentPaymentModal();
+                    loadRentTrackingData(); // Refresh the table
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .recordLedgerEntry(payload);
+    }

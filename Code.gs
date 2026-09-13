@@ -1219,13 +1219,15 @@ function addLease(payload) {
 
     // Add tenants
     if (payload.tenants && payload.tenants.length > 0) {
+      var rentPortion = payload.monthlyRent / payload.tenants.length;
       payload.tenants.forEach(function(tenant) {
         var tenantId = "TNT-" + Utilities.getUuid().substring(0, 8).toUpperCase();
         tenantSheet.appendRow([
           tenantId,
           leaseId,
           tenant.name,
-          tenant.contactInfo
+          tenant.contactInfo,
+          tenant.rentPortion ? tenant.rentPortion : rentPortion
         ]);
       });
     }
@@ -1257,7 +1259,11 @@ function recordLedgerEntry(payload) {
       payload.date,
       payload.transactionType,
       payload.chargeAmount || 0,
-      payload.paymentAmount || 0
+      payload.paymentAmount || 0,
+      payload.paymentMode || "",
+      payload.notes || "",
+      payload.rentMonth !== undefined ? payload.rentMonth : "",
+      payload.rentYear !== undefined ? payload.rentYear : ""
     ]);
 
     return { success: true, message: "Ledger entry recorded successfully" };
@@ -1295,13 +1301,14 @@ function getLeasesAndTenants() {
     }
 
     if (tenantSheet && tenantSheet.getLastRow() > 1) {
-      var tenantData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 4).getValues();
+      var tenantData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 5).getValues();
       tenants = tenantData.map(function(row) {
         return {
           tenantId: row[0],
           leaseId: row[1],
           name: row[2],
-          contactInfo: row[3]
+          contactInfo: row[3],
+          rentPortion: row[4]
         };
       });
     }
@@ -1458,8 +1465,13 @@ function setupDatabase() {
     },
     {
       name: 'Properties',
-      headers: ['Property_Name'],
-      defaults: [['Alpha Phi'], ['4638 B'], ['645 Ber'], ['Company Office']]
+      headers: ['Property_Name', 'Owner_Company', 'Address'],
+      defaults: [
+        ['Alpha Phi', 'Greek Housing LLC', '123 Alpha St'],
+        ['4638 B', 'Beta Properties', '4638 B Ave'],
+        ['645 Ber', 'Beta Properties', '645 Ber St'],
+        ['Company Office', 'Internal', 'Main Office']
+      ]
     },
     {
       name: 'Tasks',
@@ -1484,7 +1496,8 @@ function setupDatabase() {
         'Tenant_ID',
         'Lease_ID',
         'Name',
-        'Contact_Info'
+        'Contact_Info',
+        'Rent_Portion'
       ]
     },
     {
@@ -1496,7 +1509,11 @@ function setupDatabase() {
         'Date',
         'Transaction_Type',
         'Charge_Amount',
-        'Payment_Amount'
+        'Payment_Amount',
+        'Payment_Mode',
+        'Notes',
+        'Rent_Month',
+        'Rent_Year'
       ]
     }
   ];
@@ -1933,5 +1950,105 @@ function markPropertyPaid(propertyId) {
     return { success: false, error: err.message };
   } finally {
     lock.releaseLock();
+  }
+}
+// 17. GET RENT ROLL DATA FOR RENT TRACKING
+function getRentRollData(year) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var propSheet = ss.getSheetByName('Properties');
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    var tenantSheet = ss.getSheetByName('dim_Tenants');
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
+
+    var props = [];
+    if (propSheet && propSheet.getLastRow() > 1) {
+      var pData = propSheet.getRange(2, 1, propSheet.getLastRow() - 1, 3).getValues();
+      pData.forEach(function(row) {
+        props.push({ name: row[0], owner: row[1] || "", address: row[2] || "" });
+      });
+    }
+
+    var leases = [];
+    if (leaseSheet && leaseSheet.getLastRow() > 1) {
+      var lData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+      lData.forEach(function(row) {
+        leases.push({ leaseId: row[0], propertyId: row[1], startDate: new Date(row[2]), endDate: new Date(row[3]), monthlyRent: row[4], status: row[6] });
+      });
+    }
+
+    var tenants = [];
+    if (tenantSheet && tenantSheet.getLastRow() > 1) {
+      var tData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 5).getValues();
+      tData.forEach(function(row) {
+        tenants.push({ tenantId: row[0], leaseId: row[1], name: row[2], rentPortion: row[4] });
+      });
+    }
+
+    var ledgers = [];
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var ldData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 11).getValues();
+      ldData.forEach(function(row) {
+        if (row[4] === 'Rent' && (parseFloat(row[6]) > 0)) {
+          var rentM = row[9] !== "" ? parseInt(row[9]) : new Date(row[3]).getMonth();
+          var rentY = row[10] !== "" ? parseInt(row[10]) : new Date(row[3]).getFullYear();
+          if (rentY == year) {
+            ledgers.push({ leaseId: row[1], tenantId: row[2], date: new Date(row[3]), rentMonth: rentM, rentYear: rentY, amount: parseFloat(row[6]) });
+          }
+        }
+      });
+    }
+
+    var rentRoll = [];
+
+    // Build rows for each tenant in active leases for the year
+    tenants.forEach(function(tenant) {
+      var lease = leases.find(function(l) { return l.leaseId === tenant.leaseId; });
+      if (!lease) return;
+
+      // Check if lease is active in the given year
+      if (lease.startDate.getFullYear() > year || lease.endDate.getFullYear() < year) return;
+
+      var prop = props.find(function(p) { return p.name === lease.propertyId; });
+      var propName = prop ? prop.name : lease.propertyId;
+      var propOwner = prop ? prop.owner : "";
+      var propAddress = prop ? prop.address : "";
+
+      var row = {
+        leaseId: lease.leaseId,
+        tenantId: tenant.tenantId,
+        property: propName,
+        owner: propOwner,
+        address: propAddress,
+        tenantName: tenant.name,
+        expectedRent: tenant.rentPortion,
+        payments: { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0 },
+        activeMonths: { 0:false, 1:false, 2:false, 3:false, 4:false, 5:false, 6:false, 7:false, 8:false, 9:false, 10:false, 11:false }
+      };
+
+      // Figure out which months the lease is active
+      for (var m = 0; m < 12; m++) {
+        var startOfM = new Date(year, m, 1);
+        var endOfM = new Date(year, m + 1, 0);
+        if (startOfM <= lease.endDate && endOfM >= lease.startDate) {
+          row.activeMonths[m] = true;
+        }
+      }
+
+      // Sum payments by month
+      var tLedgers = ledgers.filter(function(ld) { return ld.tenantId === tenant.tenantId && ld.leaseId === tenant.leaseId; });
+      tLedgers.forEach(function(ld) {
+        var m = ld.rentMonth;
+        if (m >= 0 && m < 12) {
+          row.payments[m] += ld.amount;
+        }
+      });
+
+      rentRoll.push(row);
+    });
+
+    return { success: true, data: rentRoll };
+  } catch(e) {
+    return { success: false, error: e.message };
   }
 }
