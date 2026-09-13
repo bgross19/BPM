@@ -760,12 +760,28 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
       });
     }
 
+    var threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    var includeArchive = false;
+    if (!startDate || startDate < threeMonthsAgo) {
+      includeArchive = true;
+    }
+
     // Read Work Logs
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var archiveLaborSheet = includeArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
     var workLogs = [];
+
+    var laborData = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
       // Adjusted to read 11 columns to include Charge_Target
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+    }
+    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+    }
+
+    if (laborData.length > 0) {
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -816,9 +832,18 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
     // Read Material Expenses
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveMatSheet = includeArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
     var materials = [];
+
+    var matData = [];
     if (matSheet && matSheet.getLastRow() > 1) {
-      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
+    }
+    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
+      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
+    }
+
+    if (matData.length > 0) {
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1391,6 +1416,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('BPM App')
     .addItem('Setup Database Sheets', 'setupDatabase')
+    .addItem('Install Weekly Archiving Trigger', 'createWeeklyArchiveTrigger')
     .addToUi();
 }
 
@@ -1497,6 +1523,34 @@ function setupDatabase() {
         'Transaction_Type',
         'Charge_Amount',
         'Payment_Amount'
+      ]
+    },
+    {
+      name: 'archive_fact_Work_Logs',
+      headers: [
+        'Work_Log_ID',
+        'Timestamp',
+        'Date_Completed',
+        'Employee_ID',
+        'Property_ID',
+        'Task_ID',
+        'Hours_Worked',
+        'Work_Notes',
+        'Payroll_Status',
+        'Billing_Status',
+        'Charge_Target'
+      ]
+    },
+    {
+      name: 'archive_fact_Material_Expenses',
+      headers: [
+        'Expense_ID',
+        'Work_Log_ID',
+        'Property_ID',
+        'Vendor_Name',
+        'Item_Description',
+        'Cost',
+        'Receipt_URL'
       ]
     }
   ];
@@ -1720,8 +1774,17 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var totalMaintOutstanding = 0;
     var arMaint = [];
 
+    var threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    var includeArchive = false;
+    if (startDate < threeMonthsAgo) {
+      includeArchive = true;
+    }
+
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var archiveLaborSheet = includeArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveMatSheet = includeArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
     var ratesSheet = ss.getSheetByName('dim_Billing_Rates');
 
     var rateMap = {};
@@ -1738,8 +1801,15 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var logs = [];
     var materials = [];
 
+    var laborData = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+    }
+    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+    }
+
+    if (laborData.length > 0) {
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -1763,8 +1833,15 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
+    var matData = [];
     if (matSheet && matSheet.getLastRow() > 1) {
-      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
+    }
+    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
+      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
+    }
+
+    if (matData.length > 0) {
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1828,8 +1905,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
-    if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborDataFull = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+    if (laborData.length > 0) {
+      var laborDataFull = laborData;
       laborDataFull.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var hours = parseFloat(row[6]) || 0;
@@ -1845,10 +1922,10 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     }
 
     var totalMaterialsPeriod = 0;
-    if (matSheet && matSheet.getLastRow() > 1) {
+    if (matData.length > 0) {
         var workLogDates = {};
-        if (laborSheet && laborSheet.getLastRow() > 1) {
-            laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 3).getValues().forEach(function(row) {
+        if (laborData.length > 0) {
+            laborData.forEach(function(row) {
                 workLogDates[row[0]] = new Date(row[2]);
             });
         }
@@ -1934,4 +2011,132 @@ function markPropertyPaid(propertyId) {
   } finally {
     lock.releaseLock();
   }
+}
+// 15. AUTOMATED ARCHIVING
+function archiveOldData() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var archiveLaborSheet = ss.getSheetByName('archive_fact_Work_Logs');
+
+    var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveMatSheet = ss.getSheetByName('archive_fact_Material_Expenses');
+
+    if (!laborSheet || !archiveLaborSheet || !matSheet || !archiveMatSheet) {
+      throw new Error("Missing required sheets for archiving. Please run setupDatabase().");
+    }
+
+    var lastLaborRow = laborSheet.getLastRow();
+    if (lastLaborRow <= 1) return { success: true, message: "No data to archive." };
+
+    var cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+
+    var laborData = laborSheet.getRange(2, 1, lastLaborRow - 1, laborSheet.getLastColumn()).getValues();
+
+    var logsToArchive = [];
+    var rowIndicesToDelete = [];
+    var archivedWorkLogIds = {};
+
+    for (var i = 0; i < laborData.length; i++) {
+      var row = laborData[i];
+      var workLogId = row[0];
+      var rawDate = row[2];
+      var payrollStatus = (row[8] || '').toString().trim().toLowerCase();
+      var billingStatus = (row[9] || '').toString().trim().toLowerCase();
+
+      var logDate = null;
+      if (rawDate instanceof Date) {
+        logDate = rawDate;
+      } else if (rawDate) {
+        logDate = new Date(rawDate);
+      }
+
+      if (logDate && logDate < cutoffDate && payrollStatus === 'paid' && billingStatus === 'paid') {
+        logsToArchive.push(row);
+        rowIndicesToDelete.push(i + 2); // 1-based index, shifted for header
+        archivedWorkLogIds[workLogId] = true;
+      }
+    }
+
+    var activeLogs = [];
+    for (var m = 0; m < laborData.length; m++) {
+        if (!rowIndicesToDelete.includes(m + 2)) {
+            activeLogs.push(laborData[m]);
+        }
+    }
+
+    if (logsToArchive.length > 0) {
+      // Archive logs
+      archiveLaborSheet.getRange(archiveLaborSheet.getLastRow() + 1, 1, logsToArchive.length, logsToArchive[0].length).setValues(logsToArchive);
+
+      // Bulk update active sheet
+      laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, laborSheet.getLastColumn()).clearContent();
+      if (activeLogs.length > 0) {
+          laborSheet.getRange(2, 1, activeLogs.length, activeLogs[0].length).setValues(activeLogs);
+      }
+    }
+
+    // Process Materials
+    var lastMatRow = matSheet.getLastRow();
+    if (lastMatRow > 1) {
+      var matData = matSheet.getRange(2, 1, lastMatRow - 1, matSheet.getLastColumn()).getValues();
+      var matsToArchive = [];
+      var matRowIndicesToDelete = [];
+
+      for (var j = 0; j < matData.length; j++) {
+        var matRow = matData[j];
+        var matWorkLogId = matRow[1];
+
+        if (archivedWorkLogIds[matWorkLogId]) {
+          matsToArchive.push(matRow);
+          matRowIndicesToDelete.push(j + 2);
+        }
+      }
+
+      var activeMats = [];
+      for (var n = 0; n < matData.length; n++) {
+          if (!matRowIndicesToDelete.includes(n + 2)) {
+              activeMats.push(matData[n]);
+          }
+      }
+
+      if (matsToArchive.length > 0) {
+        archiveMatSheet.getRange(archiveMatSheet.getLastRow() + 1, 1, matsToArchive.length, matsToArchive[0].length).setValues(matsToArchive);
+
+        // Bulk update active sheet
+        matSheet.getRange(2, 1, matSheet.getLastRow() - 1, matSheet.getLastColumn()).clearContent();
+        if (activeMats.length > 0) {
+            matSheet.getRange(2, 1, activeMats.length, activeMats[0].length).setValues(activeMats);
+        }
+      }
+    }
+
+    return { success: true, archivedLogs: logsToArchive.length, message: "Archived " + logsToArchive.length + " logs." };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+function createWeeklyArchiveTrigger() {
+  // First, delete any existing triggers for this function to avoid duplicates
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'archiveOldData') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Create a new trigger to run every week on Sunday at 1 AM
+  ScriptApp.newTrigger('archiveOldData')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(1)
+    .create();
+
+  SpreadsheetApp.getUi().alert('Weekly archiving trigger has been successfully installed. It will run every Sunday at 1 AM.');
 }
