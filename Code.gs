@@ -809,6 +809,199 @@ function exportInvoicePDF(propertyId) {
   }
 }
 
+// 9. ADD NEW LEASE AND MULTIPLE TENANTS
+function addLease(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    if (!leaseSheet) throw new Error("Could not find sheet: fact_Leases");
+
+    var tenantSheet = ss.getSheetByName('dim_Tenants');
+    if (!tenantSheet) throw new Error("Could not find sheet: dim_Tenants");
+
+    var leaseId = "LSE-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+
+    // Add lease
+    leaseSheet.appendRow([
+      leaseId,
+      payload.propertyId,
+      payload.startDate,
+      payload.endDate,
+      payload.monthlyRent,
+      payload.securityDeposit,
+      "Active"
+    ]);
+
+    // Add tenants
+    if (payload.tenants && payload.tenants.length > 0) {
+      payload.tenants.forEach(function(tenant) {
+        var tenantId = "TNT-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+        tenantSheet.appendRow([
+          tenantId,
+          leaseId,
+          tenant.name,
+          tenant.contactInfo
+        ]);
+      });
+    }
+
+    return { success: true, message: "Lease and tenants added successfully", leaseId: leaseId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 10. RECORD RENT LEDGER ENTRY (CHARGE OR PAYMENT)
+function recordLedgerEntry(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
+    if (!ledgerSheet) throw new Error("Could not find sheet: fact_Rent_Ledger");
+
+    var ledgerId = "LDG-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+
+    ledgerSheet.appendRow([
+      ledgerId,
+      payload.leaseId,
+      payload.tenantId,
+      payload.date,
+      payload.transactionType,
+      payload.chargeAmount || 0,
+      payload.paymentAmount || 0
+    ]);
+
+    return { success: true, message: "Ledger entry recorded successfully" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 11. FETCH LEASES AND THEIR TENANTS (For UI Dropdowns)
+function getLeasesAndTenants() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    var tenantSheet = ss.getSheetByName('dim_Tenants');
+
+    var leases = [];
+    var tenants = [];
+
+    if (leaseSheet && leaseSheet.getLastRow() > 1) {
+      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+      leases = leaseData.map(function(row) {
+        return {
+          leaseId: row[0],
+          propertyId: row[1],
+          startDate: row[2],
+          endDate: row[3],
+          monthlyRent: row[4],
+          securityDeposit: row[5],
+          status: row[6]
+        };
+      });
+    }
+
+    if (tenantSheet && tenantSheet.getLastRow() > 1) {
+      var tenantData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 4).getValues();
+      tenants = tenantData.map(function(row) {
+        return {
+          tenantId: row[0],
+          leaseId: row[1],
+          name: row[2],
+          contactInfo: row[3]
+        };
+      });
+    }
+
+    return { success: true, leases: leases, tenants: tenants };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// 12. CALCULATE OUTSTANDING BALANCE FOR A LEASE
+function calculateLeaseBalance(leaseId) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    if (!leaseSheet) throw new Error("Could not find sheet: fact_Leases");
+
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
+
+    var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+    var lease = null;
+    for (var i = 0; i < leaseData.length; i++) {
+      if (leaseData[i][0] === leaseId) {
+        lease = {
+          startDate: new Date(leaseData[i][2]),
+          monthlyRent: parseFloat(leaseData[i][4]) || 0
+        };
+        break;
+      }
+    }
+
+    if (!lease) throw new Error("Lease not found");
+
+    // Calculate full months passed
+    var currentDate = new Date();
+    var monthsPassed = 0;
+    if (currentDate > lease.startDate) {
+        var d1 = lease.startDate;
+        var d2 = currentDate;
+        var months = (d2.getFullYear() - d1.getFullYear()) * 12;
+        months -= d1.getMonth();
+        months += d2.getMonth();
+        // If current day is less than start day, a full month hasn't passed yet for the current month
+        if (d2.getDate() < d1.getDate()) {
+            months--;
+        }
+        // At least 1 month of expected rent if the lease has started
+        monthsPassed = Math.max(1, months + 1); // +1 because first month rent is expected at start
+    }
+
+    var expectedRent = monthsPassed * lease.monthlyRent;
+    var totalCharges = 0;
+    var totalPayments = 0;
+
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
+      for (var j = 0; j < ledgerData.length; j++) {
+        if (ledgerData[j][1] === leaseId) {
+          totalCharges += parseFloat(ledgerData[j][5]) || 0;
+          totalPayments += parseFloat(ledgerData[j][6]) || 0;
+        }
+      }
+    }
+
+    // Balance = (Expected Rent from start to now) + (Additional Charges like Late Fees) - (Payments)
+    var balance = expectedRent + totalCharges - totalPayments;
+
+    return {
+      success: true,
+      balance: balance,
+      expectedRent: expectedRent,
+      totalCharges: totalCharges,
+      totalPayments: totalPayments,
+      monthsPassed: monthsPassed
+    };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * Creates a custom menu item in Google Sheets when opened.
  */
@@ -878,6 +1071,39 @@ function setupDatabase() {
       name: 'Tasks',
       headers: ['Task_Name'],
       defaults: [['Handyman'], ['Plumbing'], ['Painting'], ['Lawn Care'], ['Materials Run']]
+    },
+    {
+      name: 'fact_Leases',
+      headers: [
+        'Lease_ID',
+        'Property_ID',
+        'Start_Date',
+        'End_Date',
+        'Monthly_Rent',
+        'Security_Deposit',
+        'Status'
+      ]
+    },
+    {
+      name: 'dim_Tenants',
+      headers: [
+        'Tenant_ID',
+        'Lease_ID',
+        'Name',
+        'Contact_Info'
+      ]
+    },
+    {
+      name: 'fact_Rent_Ledger',
+      headers: [
+        'Ledger_ID',
+        'Lease_ID',
+        'Tenant_ID',
+        'Date',
+        'Transaction_Type',
+        'Charge_Amount',
+        'Payment_Amount'
+      ]
     }
   ];
 

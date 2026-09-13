@@ -53,6 +53,9 @@
                 <button onclick="switchTab('admin-view')" id="tab-admin-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-file-invoice-dollar mr-1"></i> Payroll & Billing
                 </button>
+                <button onclick="switchTab('lease-view')" id="tab-lease-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                    <i class="fas fa-home mr-1"></i> Lease Management
+                </button>
             </div>
         </nav>
     </header>
@@ -148,6 +151,127 @@
                     <div id="punches-list-container" class="divide-y divide-gray-200">
                         <p class="text-center text-gray-400 py-8 text-sm">Loading punch history...</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- ADMIN VIEW: LEASE MANAGEMENT -->
+            <div id="lease-view" class="hidden space-y-6">
+                <!-- Create Lease Form -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
+                    <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-file-contract text-blue-600 mr-2"></i>Create New Lease</h2>
+
+                    <form id="create-lease-form" onsubmit="submitNewLease(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Property</label>
+                            <input type="text" id="lease-property" list="property-list" autocomplete="off" placeholder="Type property name..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                <input type="date" id="lease-start-date" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                <input type="date" id="lease-end-date" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Monthly Rent ($)</label>
+                                <input type="number" id="lease-monthly-rent" step="0.01" min="0" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Security Deposit ($)</label>
+                                <input type="number" id="lease-security-deposit" step="0.01" min="0" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                        </div>
+
+                        <!-- Add Tenants Section -->
+                        <div class="mt-6 border-t pt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-medium text-gray-700">Tenants</label>
+                                <button type="button" onclick="addTenantRow()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
+                                    <i class="fas fa-plus mr-1"></i> Add Tenant
+                                </button>
+                            </div>
+                            <div id="tenants-container" class="space-y-2">
+                                <p id="no-tenants-msg" class="text-sm text-gray-400 italic text-center py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">No tenants added.</p>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex justify-end">
+                            <button type="submit" id="submit-lease-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all flex justify-center items-center gap-2">
+                                <span>Create Lease</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Record Ledger Entry / View Balance -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
+                    <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-money-check-alt text-green-600 mr-2"></i>Rent Ledger & Balance</h2>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Lease to View Balance / Add Entry</label>
+                        <select id="ledger-lease-select" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white" onchange="updateTenantDropdownAndBalance()">
+                            <option value="">-- Select a Lease --</option>
+                        </select>
+                    </div>
+
+                    <!-- Balance Display (Hidden until lease is selected) -->
+                    <div id="lease-balance-display" class="hidden bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-500">Current Outstanding Balance</p>
+                            <p class="text-2xl font-bold text-gray-900" id="lease-balance-amount">$0.00</p>
+                        </div>
+                        <div class="text-right text-xs text-gray-500 space-y-1">
+                            <p>Expected Rent: <span id="balance-expected-rent" class="font-medium text-gray-700"></span></p>
+                            <p>Total Charges: <span id="balance-total-charges" class="font-medium text-gray-700"></span></p>
+                            <p>Total Payments: <span id="balance-total-payments" class="font-medium text-gray-700"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- Ledger Entry Form -->
+                    <form id="ledger-entry-form" onsubmit="submitLedgerEntry(event)" class="space-y-4 border-t pt-4">
+                        <h3 class="font-medium text-gray-800 text-sm mb-2">Record Ledger Entry</h3>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tenant</label>
+                                <select id="ledger-tenant-select" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                    <option value="">-- Select Tenant --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <input type="date" id="ledger-date" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+                                <select id="ledger-type" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                    <option value="Rent">Rent Payment</option>
+                                    <option value="Security Deposit">Security Deposit</option>
+                                    <option value="Late Fee">Late Fee Charge</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Entry Nature</label>
+                                <select id="ledger-nature" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                    <option value="payment">Payment (Credit)</option>
+                                    <option value="charge">Charge (Debit)</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Amount ($)</label>
+                                <input type="number" id="ledger-amount" step="0.01" min="0.01" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none" />
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex justify-end">
+                            <button type="submit" id="submit-ledger-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all flex justify-center items-center gap-2">
+                                <span>Record Entry</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 

@@ -155,9 +155,12 @@
             const adminTab = document.getElementById('tab-admin-view');
             if (role === 'admin') {
                 adminTab.classList.remove('hidden');
+                document.getElementById('tab-lease-view').classList.remove('hidden');
+                loadLeasesAndTenants();
             } else {
                 adminTab.classList.add('hidden');
-                if (!document.getElementById('admin-view').classList.contains('hidden')) {
+                document.getElementById('tab-lease-view').classList.add('hidden');
+                if (!document.getElementById('admin-view').classList.contains('hidden') || !document.getElementById('lease-view').classList.contains('hidden')) {
                     switchTab('employee-view');
                 }
             }
@@ -167,8 +170,9 @@
             document.getElementById('employee-view').classList.add('hidden');
             document.getElementById('history-view').classList.add('hidden');
             document.getElementById('admin-view').classList.add('hidden');
+            document.getElementById('lease-view').classList.add('hidden');
 
-            ['employee-view', 'history-view', 'admin-view'].forEach(t => {
+            ['employee-view', 'history-view', 'admin-view', 'lease-view'].forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if(el) {
                     el.classList.remove('border-blue-600', 'text-blue-600');
@@ -764,3 +768,180 @@
             setTimeout(() => toast.classList.add('translate-y-full', 'opacity-0'), 3500);
         }
     </script>
+
+<script>
+    var globalLeases = [];
+    var globalTenants = [];
+
+    // Lease Management Functions
+    function addTenantRow() {
+        const container = document.getElementById('tenants-container');
+        document.getElementById('no-tenants-msg').classList.add('hidden');
+
+        const row = document.createElement('div');
+        row.className = 'tenant-row flex gap-2 items-center bg-gray-50 p-2 rounded-lg border border-gray-200';
+        row.innerHTML = `
+            <div class="flex-1">
+                <input type="text" placeholder="Tenant Name" class="tenant-name w-full rounded border-gray-300 border p-1.5 text-sm outline-none" required>
+            </div>
+            <div class="flex-1">
+                <input type="text" placeholder="Contact Info (Email/Phone)" class="tenant-contact w-full rounded border-gray-300 border p-1.5 text-sm outline-none" required>
+            </div>
+            <button type="button" onclick="this.parentElement.remove(); checkTenants();" class="text-red-500 hover:text-red-700 px-2">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        container.appendChild(row);
+    }
+
+    function checkTenants() {
+        const container = document.getElementById('tenants-container');
+        if (container.querySelectorAll('.tenant-row').length === 0) {
+            document.getElementById('no-tenants-msg').classList.remove('hidden');
+        }
+    }
+
+    function submitNewLease(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('submit-lease-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
+        const tenantRows = document.querySelectorAll('.tenant-row');
+        const tenants = [];
+        tenantRows.forEach(row => {
+            tenants.push({
+                name: row.querySelector('.tenant-name').value,
+                contactInfo: row.querySelector('.tenant-contact').value
+            });
+        });
+
+        const payload = {
+            propertyId: document.getElementById('lease-property').value,
+            startDate: document.getElementById('lease-start-date').value,
+            endDate: document.getElementById('lease-end-date').value,
+            monthlyRent: document.getElementById('lease-monthly-rent').value,
+            securityDeposit: document.getElementById('lease-security-deposit').value,
+            tenants: tenants
+        };
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    showToast("Success", "Lease and tenants added.");
+                    document.getElementById('create-lease-form').reset();
+                    document.getElementById('tenants-container').innerHTML = '<p id="no-tenants-msg" class="text-sm text-gray-400 italic text-center py-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">No tenants added.</p>';
+                    loadLeasesAndTenants();
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .withFailureHandler(function(err) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showToast("Error", err.message);
+            })
+            .addLease(payload);
+    }
+
+    function loadLeasesAndTenants() {
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (res.success) {
+                    globalLeases = res.leases || [];
+                    globalTenants = res.tenants || [];
+                    populateLeaseDropdown();
+                }
+            })
+            .getLeasesAndTenants();
+    }
+
+    function populateLeaseDropdown() {
+        const select = document.getElementById('ledger-lease-select');
+        select.innerHTML = '<option value="">-- Select a Lease --</option>';
+        globalLeases.forEach(lease => {
+            const opt = document.createElement('option');
+            opt.value = lease.leaseId;
+            opt.textContent = `${lease.propertyId} (${lease.leaseId})`;
+            select.appendChild(opt);
+        });
+    }
+
+    function updateTenantDropdownAndBalance() {
+        const leaseId = document.getElementById('ledger-lease-select').value;
+        const tenantSelect = document.getElementById('ledger-tenant-select');
+        const balanceDisplay = document.getElementById('lease-balance-display');
+
+        tenantSelect.innerHTML = '<option value="">-- Select Tenant --</option>';
+
+        if (!leaseId) {
+            balanceDisplay.classList.add('hidden');
+            return;
+        }
+
+        const filteredTenants = globalTenants.filter(t => t.leaseId === leaseId);
+        filteredTenants.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.tenantId;
+            opt.textContent = t.name;
+            tenantSelect.appendChild(opt);
+        });
+
+        // Fetch balance
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if(res.success) {
+                    balanceDisplay.classList.remove('hidden');
+                    document.getElementById('lease-balance-amount').textContent = `$${res.balance.toFixed(2)}`;
+                    document.getElementById('balance-expected-rent').textContent = `$${res.expectedRent.toFixed(2)}`;
+                    document.getElementById('balance-total-charges').textContent = `$${res.totalCharges.toFixed(2)}`;
+                    document.getElementById('balance-total-payments').textContent = `$${res.totalPayments.toFixed(2)}`;
+                }
+            })
+            .calculateLeaseBalance(leaseId);
+    }
+
+    function submitLedgerEntry(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('submit-ledger-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
+        const nature = document.getElementById('ledger-nature').value;
+        const amount = parseFloat(document.getElementById('ledger-amount').value);
+
+        const payload = {
+            leaseId: document.getElementById('ledger-lease-select').value,
+            tenantId: document.getElementById('ledger-tenant-select').value,
+            date: document.getElementById('ledger-date').value,
+            transactionType: document.getElementById('ledger-type').value,
+            chargeAmount: nature === 'charge' ? amount : 0,
+            paymentAmount: nature === 'payment' ? amount : 0
+        };
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    showToast("Success", "Ledger entry saved.");
+                    document.getElementById('ledger-amount').value = '';
+                    updateTenantDropdownAndBalance(); // Refresh balance
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .withFailureHandler(function(err) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showToast("Error", err.message);
+            })
+            .recordLedgerEntry(payload);
+    }
+</script>
