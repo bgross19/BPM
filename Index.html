@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <?!= include('Stylesheet'); ?>
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col overflow-hidden">
@@ -19,6 +20,7 @@
             <select id="role-simulator" class="bg-indigo-800 border border-indigo-700 rounded px-2 py-1 text-white focus:outline-none" onchange="switchRole(this.value)">
                 <option value="employee">Employee (Field Crew)</option>
                 <option value="admin">Admin (Payroll/Billing)</option>
+                <option value="owner">Owner (Executive)</option>
             </select>
         </div>
     </div>
@@ -49,6 +51,9 @@
                 </button>
                 <button onclick="switchTab('history-view')" id="tab-history-view" class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-history mr-1"></i> My History
+                </button>
+                <button onclick="switchTab('dashboard-view')" id="tab-dashboard-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                    <i class="fas fa-chart-line mr-1"></i> Dashboard
                 </button>
                 <button onclick="switchTab('admin-view')" id="tab-admin-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-file-invoice-dollar mr-1"></i> Payroll & Billing
@@ -399,7 +404,80 @@
             </div>
 
             <!-- ADMIN VIEW: PAYROLL & BILLING DASHBOARD -->
-            <div id="admin-view" class="hidden space-y-6">
+                        <!-- EXECUTIVE DASHBOARD VIEW -->
+            <div id="dashboard-view" class="hidden space-y-6">
+                <!-- Filters -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-end gap-4">
+                        <div class="flex-1 w-full flex items-end gap-2">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                <input type="date" id="dash-start-date" class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                <input type="date" id="dash-end-date" class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <button onclick="loadDashboardData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500">Rent Billed</h3>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" id="dash-kpi-rent-billed">$-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500">Rent Collected</h3>
+                        <p class="text-2xl font-bold text-green-600 mt-1" id="dash-kpi-rent-collected">$-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500">Maint. Billed</h3>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" id="dash-kpi-maint-billed">$-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500">Net Profit</h3>
+                        <p class="text-2xl font-bold text-blue-600 mt-1" id="dash-kpi-net-profit">$-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Chart -->
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-semibold mb-4">Cash Flow Overview</h3>
+                        <div class="h-64">
+                            <canvas id="cashFlowChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- AR Table -->
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-semibold mb-4 text-red-600">Accounts Receivable (Action Required)</h3>
+                        <div class="overflow-y-auto max-h-64">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-2">Type</th>
+                                        <th class="px-4 py-2">Property</th>
+                                        <th class="px-4 py-2 text-right">Amount</th>
+                                        <th class="px-4 py-2 text-right">Days Overdue</th>
+                                        <th class="px-4 py-2 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dash-ar-tbody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+<div id="admin-view" class="hidden space-y-6">
                 
                 <!-- DATE RANGE & PAY PERIOD FILTER BAR -->
                 <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">

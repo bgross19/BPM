@@ -145,14 +145,22 @@
             scriptRunner.withSuccessHandler(function(userInfo) {
                 if(userInfo && userInfo.name) {
                     document.getElementById('user-name-display').innerText = userInfo.name;
-                    document.getElementById('user-role-display').innerText = userInfo.role === 'admin' ? 'Admin' : 'Field Crew';
+                    let displayRole = 'Field Crew';
+                    if (userInfo.role === 'admin') displayRole = 'Admin';
+                    else if (userInfo.role === 'owner') displayRole = 'Owner / Executive';
+                    document.getElementById('user-role-display').innerText = displayRole;
+
                     document.getElementById('user-avatar').innerText = userInfo.name.charAt(0);
                     if(userInfo.role === 'admin') {
                         document.getElementById('role-simulator').value = 'admin';
                         switchRole('admin');
+                    } else if (userInfo.role === 'owner') {
+                        document.getElementById('role-simulator').value = 'owner';
+                        switchRole('owner');
                     }
                 }
             }).getUserRole();
+            initDashboardDates();
         };
 
         function populateDatalists(data) {
@@ -171,18 +179,23 @@
         function switchRole(role) {
             currentRole = role;
             const adminTab = document.getElementById('tab-admin-view');
-            if (role === 'admin') {
+            const dashTab = document.getElementById('tab-dashboard-view');
+            if (role === 'admin' || role === 'owner') {
                 adminTab.classList.remove('hidden');
                 document.getElementById('tab-lease-view').classList.remove('hidden');
                 document.getElementById('tab-settings-view').classList.remove('hidden');
                 document.getElementById('charge-target-container').classList.remove('hidden');
+                if (role === 'owner') dashTab.classList.remove('hidden');
+                else dashTab.classList.add('hidden');
+
                 loadLeasesAndTenants();
             } else {
                 adminTab.classList.add('hidden');
+                dashTab.classList.add('hidden');
                 document.getElementById('tab-lease-view').classList.add('hidden');
                 document.getElementById('tab-settings-view').classList.add('hidden');
                 document.getElementById('charge-target-container').classList.add('hidden');
-                if (!document.getElementById('admin-view').classList.contains('hidden') || !document.getElementById('lease-view').classList.contains('hidden') || !document.getElementById('settings-view').classList.contains('hidden')) {
+                if (!document.getElementById('admin-view').classList.contains('hidden') || !document.getElementById('lease-view').classList.contains('hidden') || !document.getElementById('settings-view').classList.contains('hidden') || !document.getElementById('dashboard-view').classList.contains('hidden')) {
                     switchTab('employee-view');
                 }
             }
@@ -202,11 +215,12 @@
         function switchTab(tabId) {
             document.getElementById('employee-view').classList.add('hidden');
             document.getElementById('history-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('admin-view').classList.add('hidden');
             document.getElementById('lease-view').classList.add('hidden');
             document.getElementById('settings-view').classList.add('hidden');
 
-            ['employee-view', 'history-view', 'admin-view', 'lease-view', 'settings-view'].forEach(t => {
+            ['employee-view', 'history-view', 'dashboard-view', 'admin-view', 'lease-view', 'settings-view'].forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if(el) {
                     el.classList.remove('border-blue-600', 'text-blue-600');
@@ -218,6 +232,8 @@
 
             if (tabId === 'settings-view') {
                 loadRates();
+            } else if (tabId === 'dashboard-view') {
+                loadDashboardData();
             }
             const activeTabEl = document.getElementById(`tab-${tabId}`);
             if(activeTabEl) {
@@ -925,7 +941,139 @@
             toast.classList.remove('translate-y-full', 'opacity-0');
             setTimeout(() => toast.classList.add('translate-y-full', 'opacity-0'), 3500);
         }
-    </script>
+
+        // --- DASHBOARD FUNCTIONS ---
+        let cashFlowChart = null;
+
+        function initDashboardDates() {
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+            document.getElementById('dash-start-date').value = firstDay.toISOString().split('T')[0];
+            document.getElementById('dash-end-date').value = lastDay.toISOString().split('T')[0];
+        }
+
+        function loadDashboardData() {
+            const startDate = document.getElementById('dash-start-date').value;
+            const endDate = document.getElementById('dash-end-date').value;
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    if (response.success) {
+                        updateDashboardUI(response.data);
+                    } else {
+                        alert('Error loading dashboard: ' + response.error);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('Server error: ' + error.message);
+                })
+                .getExecutiveDashboardData(startDate, endDate);
+        }
+
+        function updateDashboardUI(data) {
+            // Update KPIs
+            document.getElementById('dash-kpi-rent-billed').textContent = `$${data.rent.billed.toFixed(2)}`;
+            document.getElementById('dash-kpi-rent-collected').textContent = `$${data.rent.collected.toFixed(2)}`;
+            document.getElementById('dash-kpi-maint-billed').textContent = `$${data.maintenance.billed.toFixed(2)}`;
+            document.getElementById('dash-kpi-net-profit').textContent = `$${data.financials.netProfit.toFixed(2)}`;
+
+            // Update Chart
+            updateChart(data.financials.cashIn, data.financials.cashOut);
+
+            // Update AR Table
+            const tbody = document.getElementById('dash-ar-tbody');
+            tbody.innerHTML = '';
+
+            if (data.accountsReceivable.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center">No outstanding balances found.</td></tr>';
+                return;
+            }
+
+            data.accountsReceivable.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-gray-50";
+
+                const typeClass = item.type === 'Rent' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
+
+                let actionBtn = '';
+                if (item.type === 'Maintenance') {
+                     actionBtn = `<button onclick="markPropPaid('${item.propertyId}')" class="text-blue-600 hover:text-blue-800 font-medium text-xs border border-blue-600 rounded px-2 py-1">Mark Paid</button>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${typeClass}">${item.type}</span></td>
+                    <td class="px-4 py-3 font-medium">${item.propertyId}</td>
+                    <td class="px-4 py-3 text-right font-semibold">$${item.amount.toFixed(2)}</td>
+                    <td class="px-4 py-3 text-right ${item.daysOverdue > 30 ? 'text-red-600 font-bold' : ''}">${item.daysOverdue} days</td>
+                    <td class="px-4 py-3 text-center">${actionBtn}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateChart(cashIn, cashOut) {
+            const ctx = document.getElementById('cashFlowChart');
+            if (cashFlowChart) {
+                cashFlowChart.destroy();
+            }
+
+            cashFlowChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Cash Flow'],
+                    datasets: [
+                        {
+                            label: 'Cash In',
+                            data: [cashIn],
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)', // green-500
+                            borderColor: 'rgb(21, 128, 61)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Cash Out',
+                            data: [cashOut],
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)', // red-500
+                            borderColor: 'rgb(185, 28, 28)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function markPropPaid(propertyId) {
+            if (!confirm(`Mark outstanding maintenance for ${propertyId} as PAID?`)) return;
+
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if(res.success) {
+                        alert(res.message);
+                        loadDashboardData();
+                    } else {
+                        alert("Error: " + res.error);
+                    }
+                })
+                .markPropertyPaid(propertyId);
+        }
+
+
+</script>
 
 <script>
     var globalLeases = [];
