@@ -490,7 +490,7 @@
                             <td class="py-3 px-4">${rate.employeeName} <span class="text-xs text-gray-400">(${rate.employeeId})</span></td>
                             <td class="py-3 px-4 text-right font-semibold text-gray-900">$${parseFloat(rate.rate).toFixed(2)}</td>
                             <td class="py-3 px-4 text-center">
-                                <button onclick='editRate(${JSON.stringify(rate).replace(/'/g, "\\'")})' class="text-blue-600 hover:text-blue-800 mr-3"><i class="fas fa-edit"></i></button>
+                                <button onclick='editRate(${JSON.stringify(rate).replace(/'/g, "&#39;")})' class="text-blue-600 hover:text-blue-800 mr-3"><i class="fas fa-edit"></i></button>
                                 <button onclick="deleteRate('${rate.rateId}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
                             </td>
                         </tr>
