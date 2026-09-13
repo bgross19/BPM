@@ -148,7 +148,8 @@ function submitWorkLog(payload) {
       payload.hours,          // Hours_Worked
       payload.notes,          // Work_Notes
       "Pending",              // Payroll_Status (Approval workflow starts as Pending)
-      "Unbilled"              // Billing_Status
+      "Unbilled",             // Billing_Status
+      payload.chargeTarget || "Owner" // Charge_Target
     ]);
     
     // --- WRITE TO MATERIALS SHEET (If materials were added) ---
@@ -213,7 +214,7 @@ function getEmployeeWorkLogs() {
     var dailyTotals = {};
 
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 10).getValues();
+      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
       for (var i = 0; i < laborData.length; i++) {
         var row = laborData[i];
         var empId = (row[3] || '').toString().trim();
@@ -285,7 +286,7 @@ function updateWorkLog(payload) {
     var lastRow = laborSheet.getLastRow();
     if (lastRow <= 1) throw new Error("No work logs found to update.");
 
-    var range = laborSheet.getRange(2, 1, lastRow - 1, 10);
+    var range = laborSheet.getRange(2, 1, lastRow - 1, 11);
     var values = range.getValues();
 
     var updated = false;
@@ -316,6 +317,10 @@ function updateWorkLog(payload) {
       payload.notes       // Work_Notes
     ]];
     updatedRowRange.setValues(updatedRowData);
+
+    if (payload.chargeTarget !== undefined) {
+      laborSheet.getRange(rowToUpdate, 11, 1, 1).setValue(payload.chargeTarget);
+    }
 
     return { success: true, message: "Punch updated successfully" };
   } catch (error) {
@@ -391,17 +396,44 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
       });
     }
 
+    // Build Billing Rates Dictionary
+    var ratesSheet = ss.getSheetByName('dim_Billing_Rates');
+    var rateMap = {};
+    if (ratesSheet && ratesSheet.getLastRow() > 1) {
+      var ratesData = ratesSheet.getRange(2, 1, ratesSheet.getLastRow() - 1, 6).getValues();
+      ratesData.forEach(function(row) {
+        var taskId = (row[1] || '').toString().trim();
+        var empId = (row[3] || '').toString().trim();
+        var rate = parseFloat(row[5]) || 0;
+        if (taskId && empId) {
+          var key = taskId + '_' + empId;
+          rateMap[key] = rate;
+        }
+      });
+    }
+
     // Read Work Logs
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     var workLogs = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 10).getValues();
+      // Adjusted to read 11 columns to include Charge_Target
+      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
+        var taskId = (row[5] || '').toString().trim();
         var empInfo = employeeMap[empId] || { name: empId || 'Unassigned', payRate: 0 };
         var hours = parseFloat(row[6]) || 0;
         var payRate = empInfo.payRate;
         var grossPay = hours * payRate;
+
+        // Calculate Billable Amount
+        var billableRate = 0;
+        if (rateMap[taskId + '_' + empId] !== undefined) {
+          billableRate = rateMap[taskId + '_' + empId];
+        } else if (rateMap[taskId + '_DEFAULT'] !== undefined) {
+          billableRate = rateMap[taskId + '_DEFAULT'];
+        }
+        var billableAmount = hours * billableRate;
 
         var rawDate = row[2];
         var logDate = rawDate ? new Date(rawDate) : null;
@@ -427,7 +459,9 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
           workNotes: row[7],
           payrollStatus: status,
           billingStatus: (row[9] || 'Unbilled').toString().trim(),
-          grossPay: grossPay
+          chargeTarget: (row[10] || 'Owner').toString().trim(),
+          grossPay: grossPay,
+          billableAmount: billableAmount
         });
       });
     }
@@ -1031,7 +1065,19 @@ function setupDatabase() {
         'Hours_Worked',
         'Work_Notes',
         'Payroll_Status',
-        'Billing_Status'
+        'Billing_Status',
+        'Charge_Target'
+      ]
+    },
+    {
+      name: 'dim_Billing_Rates',
+      headers: [
+        'Rate_ID',
+        'Task_ID',
+        'Task_Name',
+        'Employee_ID',
+        'Employee_Name',
+        'Owner_Hourly_Bill_Rate'
       ]
     },
     {
@@ -1134,4 +1180,103 @@ function setupDatabase() {
   SpreadsheetApp.getUi().alert(
     'Database setup complete!\n\nChecked ' + schema.length + ' required sheets. Created ' + newlyCreated + ' missing sheet(s).'
   );
+}
+
+// 12. BILLING RATES CRUD
+function getBillingRates() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Billing_Rates');
+    if (!sheet) return [];
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    return data.map(function(row) {
+      return {
+        rateId: row[0],
+        taskId: row[1],
+        taskName: row[2],
+        employeeId: row[3],
+        employeeName: row[4],
+        rate: row[5]
+      };
+    });
+  } catch (error) {
+    Logger.log("Error getting billing rates: " + error.message);
+    return [];
+  }
+}
+
+function addBillingRate(payload) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Billing_Rates');
+    if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
+
+    var rateId = Utilities.getUuid();
+    sheet.appendRow([
+      rateId,
+      payload.taskId,
+      payload.taskName || payload.taskId,
+      payload.employeeId,
+      payload.employeeName || payload.employeeId,
+      payload.rate
+    ]);
+    return { success: true, message: "Rate added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateBillingRate(payload) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Billing_Rates');
+    if (!sheet) throw new Error("Sheet not found");
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No rates to update");
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.rateId) {
+        var row = i + 2;
+        sheet.getRange(row, 2, 1, 5).setValues([[
+          payload.taskId,
+          payload.taskName || payload.taskId,
+          payload.employeeId,
+          payload.employeeName || payload.employeeId,
+          payload.rate
+        ]]);
+        return { success: true, message: "Rate updated" };
+      }
+    }
+    throw new Error("Rate ID not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteBillingRate(rateId) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Billing_Rates');
+    if (!sheet) throw new Error("Sheet not found");
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No rates to delete");
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === rateId) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Rate deleted" };
+      }
+    }
+    throw new Error("Rate ID not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }

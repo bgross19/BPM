@@ -56,6 +56,9 @@
                 <button onclick="switchTab('lease-view')" id="tab-lease-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-home mr-1"></i> Lease Management
                 </button>
+                <button onclick="switchTab('settings-view')" id="tab-settings-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                    <i class="fas fa-cog mr-1"></i> Settings
+                </button>
             </div>
         </nav>
     </header>
@@ -94,6 +97,16 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Hours <span class="text-red-500">*</span></label>
                                 <input type="number" id="log-hours" step="0.25" min="0.25" placeholder="e.g. 1.5" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                             </div>
+                        </div>
+
+                        <!-- Charge Target (Admin Only) -->
+                        <div id="charge-target-container" class="hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Charge Target <span class="text-xs text-gray-500 font-normal">(Admin Only)</span></label>
+                            <select id="log-charge-target" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white">
+                                <option value="Owner" selected>Owner Charge</option>
+                                <option value="Security Deposit">Security Deposit Deduction</option>
+                                <option value="Overhead">Overhead</option>
+                            </select>
                         </div>
 
                         <!-- Work Notes -->
@@ -377,6 +390,7 @@
                                     <th class="py-3 px-4">Property / Task</th>
                                     <th class="py-3 px-4">Hours</th>
                                     <th class="py-3 px-4">Notes</th>
+                                    <th class="py-3 px-4">Charge Target</th>
                                     <th class="py-3 px-4">Status</th>
                                     <th class="py-3 px-4 text-right">Approval Actions</th>
                                 </tr>
@@ -496,6 +510,7 @@
                                 <th class="p-2 border-b">Date</th>
                                 <th class="p-2 border-b">Worker</th>
                                 <th class="p-2 border-b">Task / Notes</th>
+                                <th class="p-2 border-b">Target</th>
                                 <th class="p-2 border-b text-right">Hrs</th>
                                 <th class="p-2 border-b text-right">Cost</th>
                             </tr>
@@ -581,6 +596,68 @@
                     Yes, submit anyway
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ADMIN VIEW: SETTINGS (Billing Rates) -->
+    <div id="settings-view" class="hidden space-y-6">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-cog text-blue-600 mr-2"></i>Billing Rates Configuration</h2>
+                <button onclick="openRateModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                    <i class="fas fa-plus mr-1"></i> Add Rate
+                </button>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                    <thead class="bg-gray-50 text-gray-600">
+                        <tr>
+                            <th class="py-3 px-4 font-semibold">Task Name (ID)</th>
+                            <th class="py-3 px-4 font-semibold">Employee Name (ID)</th>
+                            <th class="py-3 px-4 font-semibold text-right">Hourly Bill Rate</th>
+                            <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rates-table-body" class="bg-white divide-y divide-gray-100">
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-gray-500">Loading rates...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- RATE MODAL -->
+    <div id="rate-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-gray-800" id="rate-modal-title">Add Billing Rate</h3>
+                <button onclick="closeRateModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="rate-form" onsubmit="submitRate(event)" class="p-5 overflow-y-auto space-y-4">
+                <input type="hidden" id="rate-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
+                    <input type="text" id="rate-task-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <p class="text-xs text-gray-500 mt-1">Use exact Task name</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                    <input type="text" id="rate-employee-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <p class="text-xs text-gray-500 mt-1">Use exactly 'DEFAULT' to set a fallback rate for all employees on this task.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Owner Hourly Bill Rate ($)</label>
+                    <input type="number" step="0.01" min="0" id="rate-amount" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeRateModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-rate-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <span>Save Rate</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
