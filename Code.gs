@@ -2052,3 +2052,253 @@ function getRentRollData(year) {
     return { success: false, error: e.message };
   }
 }
+
+// Properties CRUD
+
+function _isAdminOrOwner() {
+  var activeUser = getUserRole();
+  return activeUser.role === 'admin' || activeUser.role === 'owner';
+}
+
+function getProperties() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    return data.map(function(row) {
+      return { propertyName: row[0], ownerCompany: row[1], address: row[2] };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function addProperty(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    sheet.appendRow([payload.propertyName, payload.ownerCompany || "", payload.address || ""]);
+    return { success: true, message: "Property added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateProperty(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No properties to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.oldPropertyName) {
+        sheet.getRange(i + 2, 1, 1, 3).setValues([[payload.propertyName, payload.ownerCompany || "", payload.address || ""]]);
+        return { success: true, message: "Property updated" };
+      }
+    }
+    throw new Error("Property not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteProperty(propertyName) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No properties to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === propertyName) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Property deleted" };
+      }
+    }
+    throw new Error("Property not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Employees CRUD
+function getEmployees() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    return data.map(function(row) {
+      return {
+        employeeId: row[0],
+        fullName: row[1],
+        email: row[2],
+        hourlyPayRate: row[3],
+        role: row[4],
+        phoneNumber: row[5],
+        status: row[6]
+      };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function addEmployee(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var newId = payload.employeeId || ("EMP-" + Utilities.getUuid().substring(0, 5).toUpperCase());
+    sheet.appendRow([
+      newId,
+      payload.fullName || "",
+      payload.email || "",
+      payload.hourlyPayRate || 0,
+      payload.role || "Field Crew",
+      payload.phoneNumber || "",
+      payload.status || "Active"
+    ]);
+    return { success: true, message: "Employee added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateEmployee(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No employees to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.employeeId) {
+        sheet.getRange(i + 2, 1, 1, 7).setValues([[
+          payload.employeeId,
+          payload.fullName || "",
+          payload.email || "",
+          payload.hourlyPayRate || 0,
+          payload.role || "Field Crew",
+          payload.phoneNumber || "",
+          payload.status || "Active"
+        ]]);
+        return { success: true, message: "Employee updated" };
+      }
+    }
+    throw new Error("Employee not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteEmployee(employeeId) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No employees to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === employeeId) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Employee deleted" };
+      }
+    }
+    throw new Error("Employee not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Tasks CRUD
+function getTasks() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    return data.map(function(row) {
+      return { taskName: row[0] };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function addTask(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    sheet.appendRow([payload.taskName]);
+    return { success: true, message: "Task added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateTask(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No tasks to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.oldTaskName) {
+        sheet.getRange(i + 2, 1, 1, 1).setValues([[payload.taskName]]);
+        return { success: true, message: "Task updated" };
+      }
+    }
+    throw new Error("Task not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteTask(taskName) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No tasks to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === taskName) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Task deleted" };
+      }
+    }
+    throw new Error("Task not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
