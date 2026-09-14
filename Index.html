@@ -175,13 +175,62 @@
             <!-- ADMIN VIEW: RENTALS (Lease Management & Settlements) -->
             <div id="lease-view" class="hidden space-y-6">
                 <!-- Rentals Sub-Navigation -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-2xl mx-auto flex space-x-2">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-3xl mx-auto flex space-x-2">
                     <button onclick="switchRentalSubTab('lease-management-sub')" id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
                         Lease Management
                     </button>
                     <button onclick="switchRentalSubTab('settlements-sub')" id="tab-settlements-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                         Settlements
                     </button>
+                    <button onclick="switchRentalSubTab('rent-tracking-sub')" id="tab-rent-tracking-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                        Rent Tracking
+                    </button>
+                </div>
+
+                <!-- SUB-VIEW: RENT TRACKING -->
+                <div id="rent-tracking-sub" class="hidden space-y-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-full mx-auto">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                            <h2 class="text-lg font-semibold"><i class="fas fa-chart-line text-blue-600 mr-2"></i>Rent Tracking Roll</h2>
+
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <select id="rt-year-filter" onchange="loadRentTrackingData()" class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <!-- Options populated by JS -->
+                                </select>
+                                <input type="text" id="rt-owner-filter" oninput="filterRentTrackingTable()" placeholder="Filter Owner/Company..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
+                                <input type="text" id="rt-address-filter" oninput="filterRentTrackingTable()" placeholder="Filter Address..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse" id="rent-tracking-table">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-t">
+                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(0)">Property</th>
+                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(1)">Owner/Company</th>
+                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(2)">Address</th>
+                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(3)">Tenant Name</th>
+                                        <th class="p-3 font-medium text-right">Expected Rent</th>
+                                        <th class="p-3 font-medium text-center">Jan</th>
+                                        <th class="p-3 font-medium text-center">Feb</th>
+                                        <th class="p-3 font-medium text-center">Mar</th>
+                                        <th class="p-3 font-medium text-center">Apr</th>
+                                        <th class="p-3 font-medium text-center">May</th>
+                                        <th class="p-3 font-medium text-center">Jun</th>
+                                        <th class="p-3 font-medium text-center">Jul</th>
+                                        <th class="p-3 font-medium text-center">Aug</th>
+                                        <th class="p-3 font-medium text-center">Sep</th>
+                                        <th class="p-3 font-medium text-center">Oct</th>
+                                        <th class="p-3 font-medium text-center">Nov</th>
+                                        <th class="p-3 font-medium text-center">Dec</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rent-tracking-tbody" class="text-sm divide-y divide-gray-100">
+                                    <!-- Rows populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- SUB-VIEW: LEASE MANAGEMENT -->
@@ -789,29 +838,136 @@
 
     <!-- ADMIN VIEW: SETTINGS (Billing Rates) -->
     <div id="settings-view" class="hidden space-y-6">
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-cog text-blue-600 mr-2"></i>Billing Rates Configuration</h2>
-                <button onclick="openRateModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
-                    <i class="fas fa-plus mr-1"></i> Add Rate
-                </button>
+        <!-- Settings Sub-Navigation -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-4xl mx-auto flex space-x-2">
+            <button onclick="switchSettingsSubTab('billing-rates-sub')" id="tab-billing-rates-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+                Billing Rates
+            </button>
+            <button onclick="switchSettingsSubTab('properties-sub')" id="tab-properties-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                Properties
+            </button>
+            <button onclick="switchSettingsSubTab('employees-sub')" id="tab-employees-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                Employees
+            </button>
+            <button onclick="switchSettingsSubTab('tasks-sub')" id="tab-tasks-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                Task Categories
+            </button>
+        </div>
+
+        <!-- SUB-VIEW: BILLING RATES -->
+        <div id="billing-rates-sub" class="space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-money-bill-wave text-blue-600 mr-2"></i>Billing Rates Configuration</h2>
+                    <button onclick="openRateModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <i class="fas fa-plus mr-1"></i> Add Rate
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold">Task Name (ID)</th>
+                                <th class="py-3 px-4 font-semibold">Employee Name (ID)</th>
+                                <th class="py-3 px-4 font-semibold text-right">Hourly Bill Rate</th>
+                                <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rates-table-body" class="bg-white divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="4" class="py-6 text-center text-gray-500">Loading rates...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="overflow-x-auto rounded-lg border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
-                    <thead class="bg-gray-50 text-gray-600">
-                        <tr>
-                            <th class="py-3 px-4 font-semibold">Task Name (ID)</th>
-                            <th class="py-3 px-4 font-semibold">Employee Name (ID)</th>
-                            <th class="py-3 px-4 font-semibold text-right">Hourly Bill Rate</th>
-                            <th class="py-3 px-4 font-semibold text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rates-table-body" class="bg-white divide-y divide-gray-100">
-                        <tr>
-                            <td colspan="4" class="py-6 text-center text-gray-500">Loading rates...</td>
-                        </tr>
-                    </tbody>
-                </table>
+        </div>
+
+        <!-- SUB-VIEW: PROPERTIES -->
+        <div id="properties-sub" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-home text-blue-600 mr-2"></i>Properties</h2>
+                    <button onclick="openPropertyModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <i class="fas fa-plus mr-1"></i> Add Property
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold">Property Name</th>
+                                <th class="py-3 px-4 font-semibold">Owner/Company</th>
+                                <th class="py-3 px-4 font-semibold">Address</th>
+                                <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="properties-table-body" class="bg-white divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="4" class="py-6 text-center text-gray-500">Loading properties...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-VIEW: EMPLOYEES -->
+        <div id="employees-sub" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-users text-blue-600 mr-2"></i>Employees</h2>
+                    <button onclick="openEmployeeModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <i class="fas fa-plus mr-1"></i> Add Employee
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold">ID</th>
+                                <th class="py-3 px-4 font-semibold">Name</th>
+                                <th class="py-3 px-4 font-semibold">Email</th>
+                                <th class="py-3 px-4 font-semibold">Pay Rate ($)</th>
+                                <th class="py-3 px-4 font-semibold">Role</th>
+                                <th class="py-3 px-4 font-semibold">Status</th>
+                                <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employees-table-body" class="bg-white divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="7" class="py-6 text-center text-gray-500">Loading employees...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-VIEW: TASKS -->
+        <div id="tasks-sub" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-tasks text-blue-600 mr-2"></i>Task Categories</h2>
+                    <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <i class="fas fa-plus mr-1"></i> Add Task
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th class="py-3 px-4 font-semibold">Task Name</th>
+                                <th class="py-3 px-4 font-semibold text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-table-body" class="bg-white divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="2" class="py-6 text-center text-gray-500">Loading tasks...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -843,6 +999,178 @@
                     <button type="button" onclick="closeRateModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-rate-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Rate</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<!-- PROPERTY MODAL -->
+    <div id="property-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-gray-800" id="property-modal-title">Add Property</h3>
+                <button onclick="closePropertyModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="property-form" onsubmit="submitProperty(event)" class="p-5 overflow-y-auto space-y-4">
+                <input type="hidden" id="old-property-name">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Property Name (ID)</label>
+                    <input type="text" id="prop-name" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Owner / Company</label>
+                    <input type="text" id="prop-owner" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                    <input type="text" id="prop-address" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closePropertyModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-property-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <span>Save Property</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EMPLOYEE MODAL -->
+    <div id="employee-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-gray-800" id="employee-modal-title">Add Employee</h3>
+                <button onclick="closeEmployeeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="employee-form" onsubmit="submitEmployee(event)" class="p-5 overflow-y-auto space-y-4">
+                <input type="hidden" id="emp-is-edit" value="false">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                    <input type="text" id="emp-id" placeholder="Auto-generated if empty" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" id="emp-name" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" id="emp-email" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                        <input type="text" id="emp-phone" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hourly Pay Rate ($)</label>
+                        <input type="number" step="0.01" min="0" id="emp-rate" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                        <select id="emp-role" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="Field Crew">Field Crew</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Owner">Owner</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select id="emp-status" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeEmployeeModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-employee-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <span>Save Employee</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TASK MODAL -->
+    <div id="task-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-gray-800" id="task-modal-title">Add Task Category</h3>
+                <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="task-form" onsubmit="submitTask(event)" class="p-5 overflow-y-auto space-y-4">
+                <input type="hidden" id="old-task-name">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Task Category Name</label>
+                    <input type="text" id="task-name" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                </div>
+                <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-task-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <span>Save Task</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RENT PAYMENT MODAL (Rent Tracking) -->
+    <div id="rent-payment-modal" class="hidden fixed inset-0 z-50 bg-gray-900 bg-opacity-50 flex items-center justify-center backdrop-blur-sm px-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-semibold text-gray-800"><i class="fas fa-money-bill-wave text-green-500 mr-2"></i>Record Rent Payment</h3>
+                <button type="button" onclick="closeRentPaymentModal()" class="text-gray-400 hover:text-red-500 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="rent-payment-form" onsubmit="submitRentTrackingPayment(event)" class="p-5 space-y-4 overflow-y-auto">
+                <input type="hidden" id="rt-lease-id">
+                <input type="hidden" id="rt-tenant-id">
+                <input type="hidden" id="rt-month">
+                <input type="hidden" id="rt-year">
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tenant & Property</label>
+                    <p id="rt-tenant-prop-desc" class="text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-200"></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
+                        <input type="date" id="rt-payment-date" required class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-green-500 outline-none text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount ($)</label>
+                        <input type="number" id="rt-payment-amount" step="0.01" min="0" required class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-green-500 outline-none text-sm" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Mode of Payment</label>
+                    <select id="rt-payment-mode" required class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-green-500 outline-none text-sm bg-white">
+                        <option value="">-- Select Mode --</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Check">Check</option>
+                        <option value="Zelle">Zelle</option>
+                        <option value="Venmo">Venmo</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <input type="text" id="rt-payment-notes" placeholder="Optional notes (e.g. Check #)" class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-green-500 outline-none text-sm" />
+                </div>
+
+                <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeRentPaymentModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button type="submit" id="submit-rt-payment-btn" class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <span>Save Payment</span>
                     </button>
                 </div>
             </form>

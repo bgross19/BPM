@@ -141,6 +141,7 @@
         const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
         window.onload = function() {
+            initRentTracking();
             scriptRunner.withSuccessHandler(populateDatalists).getDropdownData();
             scriptRunner.withSuccessHandler(function(userInfo) {
                 if(userInfo && userInfo.name) {
@@ -204,9 +205,11 @@
         function switchRentalSubTab(subTabId) {
             document.getElementById('lease-management-sub').classList.add('hidden');
             document.getElementById('settlements-sub').classList.add('hidden');
+            document.getElementById('rent-tracking-sub').classList.add('hidden');
 
             document.getElementById('tab-lease-management-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
             document.getElementById('tab-settlements-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
+            document.getElementById('tab-rent-tracking-sub').className = "flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center";
 
             document.getElementById(subTabId).classList.remove('hidden');
             document.getElementById(`tab-${subTabId}`).className = "flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center";
@@ -231,7 +234,13 @@
             document.getElementById(tabId).classList.remove('hidden');
 
             if (tabId === 'settings-view') {
-                loadRates();
+                // Default to first subtab if none selected
+                if (document.getElementById('billing-rates-sub').classList.contains('hidden') &&
+                    document.getElementById('properties-sub').classList.contains('hidden') &&
+                    document.getElementById('employees-sub').classList.contains('hidden') &&
+                    document.getElementById('tasks-sub').classList.contains('hidden')) {
+                    switchSettingsSubTab('billing-rates-sub');
+                }
             } else if (tabId === 'dashboard-view') {
                 loadDashboardData();
             }
@@ -245,6 +254,38 @@
                 loadEmployeeHistory();
             } else if(tabId === 'admin-view') {
                 loadAdminDashboardData();
+            }
+        }
+
+        // SETTINGS SUB TAB LOGIC
+        function switchSettingsSubTab(subTabId) {
+            ['billing-rates-sub', 'properties-sub', 'employees-sub', 'tasks-sub'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+
+            ['tab-billing-rates-sub', 'tab-properties-sub', 'tab-employees-sub', 'tab-tasks-sub'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('bg-blue-50', 'text-blue-700');
+                    el.classList.add('text-gray-600', 'hover:bg-gray-50');
+                }
+            });
+
+            document.getElementById(subTabId).classList.remove('hidden');
+            const tabBtn = document.getElementById(`tab-${subTabId}`);
+            if (tabBtn) {
+                tabBtn.classList.remove('text-gray-600', 'hover:bg-gray-50');
+                tabBtn.classList.add('bg-blue-50', 'text-blue-700');
+            }
+
+            if (subTabId === 'billing-rates-sub') {
+                loadRates();
+            } else if (subTabId === 'properties-sub') {
+                loadProperties();
+            } else if (subTabId === 'employees-sub') {
+                loadEmployees();
+            } else if (subTabId === 'tasks-sub') {
+                loadTasks();
             }
         }
 
@@ -958,7 +999,7 @@
             const startDate = document.getElementById('dash-start-date').value;
             const endDate = document.getElementById('dash-end-date').value;
 
-            google.script.run
+            scriptRunner
                 .withSuccessHandler(function(response) {
                     if (response.success) {
                         updateDashboardUI(response.data);
@@ -1060,7 +1101,7 @@
         function markPropPaid(propertyId) {
             if (!confirm(`Mark outstanding maintenance for ${propertyId} as PAID?`)) return;
 
-            google.script.run
+            scriptRunner
                 .withSuccessHandler(function(res) {
                     if(res.success) {
                         alert(res.message);
@@ -1073,9 +1114,7 @@
         }
 
 
-</script>
 
-<script>
     var globalLeases = [];
     var globalTenants = [];
 
@@ -1133,7 +1172,7 @@
             tenants: tenants
         };
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1155,7 +1194,7 @@
     }
 
     function loadLeasesAndTenants() {
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 if (res.success) {
                     globalLeases = res.leases || [];
@@ -1203,7 +1242,7 @@
         });
 
         // Fetch balance
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 if(res.success) {
                     balanceDisplay.classList.remove('hidden');
@@ -1227,7 +1266,7 @@
         const monthYear = document.getElementById('os-month').value;
         const feePercent = parseFloat(document.getElementById('os-fee').value);
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1259,7 +1298,7 @@
         const monthYear = document.getElementById('os-month').value;
         const feePercent = parseFloat(document.getElementById('os-fee').value);
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1293,7 +1332,7 @@
 
         const leaseId = document.getElementById('sd-lease-select').value;
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1322,7 +1361,7 @@
 
         const leaseId = document.getElementById('sd-lease-select').value;
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1347,6 +1386,10 @@
             .exportSecurityDepositSettlementPDF(leaseId);
     }
 
+    function closeRentPaymentModal() {
+        document.getElementById('rent-payment-modal').classList.add('hidden');
+    }
+
     function submitLedgerEntry(e) {
         e.preventDefault();
 
@@ -1367,7 +1410,7 @@
             paymentAmount: nature === 'payment' ? amount : 0
         };
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1386,4 +1429,516 @@
             })
             .recordLedgerEntry(payload);
     }
+    let currentRentRollData = [];
+    let currentRentRollYear = new Date().getFullYear();
+
+    function initRentTracking() {
+        const yearSelect = document.getElementById('rt-year-filter');
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+            yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+        }
+        loadRentTrackingData();
+    }
+
+    function loadRentTrackingData() {
+        const year = document.getElementById('rt-year-filter').value;
+        currentRentRollYear = parseInt(year);
+        const tbody = document.getElementById('rent-tracking-tbody');
+        tbody.innerHTML = '<tr><td colspan="17" class="text-center py-4 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading rent roll data...</td></tr>';
+
+        scriptRunner
+            .withSuccessHandler(function(res) {
+                if(res.success) {
+                    currentRentRollData = res.data;
+                    renderRentTrackingTable();
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .getRentRollData(currentRentRollYear);
+    }
+
+    function filterRentTrackingTable() {
+        renderRentTrackingTable();
+    }
+
+    let rtSortCol = -1;
+    let rtSortAsc = true;
+    function sortRentTracking(colIndex) {
+        if (rtSortCol === colIndex) {
+            rtSortAsc = !rtSortAsc;
+        } else {
+            rtSortCol = colIndex;
+            rtSortAsc = true;
+        }
+        renderRentTrackingTable();
+    }
+
+    function renderRentTrackingTable() {
+        const tbody = document.getElementById('rent-tracking-tbody');
+        const ownerFilter = document.getElementById('rt-owner-filter').value.toLowerCase();
+        const addressFilter = document.getElementById('rt-address-filter').value.toLowerCase();
+
+        let filteredData = currentRentRollData.filter(r => {
+            const matchOwner = !ownerFilter || (r.owner && r.owner.toLowerCase().includes(ownerFilter));
+            const matchAddress = !addressFilter || (r.address && r.address.toLowerCase().includes(addressFilter));
+            return matchOwner && matchAddress;
+        });
+
+        if (rtSortCol !== -1) {
+            filteredData.sort((a, b) => {
+                let valA, valB;
+                if (rtSortCol === 0) { valA = a.property; valB = b.property; }
+                else if (rtSortCol === 1) { valA = a.owner; valB = b.owner; }
+                else if (rtSortCol === 2) { valA = a.address; valB = b.address; }
+                else if (rtSortCol === 3) { valA = a.tenantName; valB = b.tenantName; }
+
+                if (valA < valB) return rtSortAsc ? -1 : 1;
+                if (valA > valB) return rtSortAsc ? 1 : -1;
+                return 0;
+            });
+        }
+
+        tbody.innerHTML = '';
+        if (filteredData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="17" class="text-center py-4 text-gray-500">No rent data found for criteria.</td></tr>';
+            return;
+        }
+
+        filteredData.forEach(row => {
+            let tr = document.createElement('tr');
+            tr.className = "hover:bg-gray-50 transition-colors";
+
+            let html = `
+                <td class="p-3 text-gray-800 font-medium">${row.property}</td>
+                <td class="p-3 text-gray-600">${row.owner}</td>
+                <td class="p-3 text-gray-600">${row.address}</td>
+                <td class="p-3 text-gray-800">${row.tenantName}</td>
+                <td class="p-3 text-right font-medium text-gray-900">$${(row.expectedRent||0).toFixed(2)}</td>
+            `;
+
+            for(let m=0; m<12; m++) {
+                if (!row.activeMonths[m]) {
+                    html += `<td class="p-3 text-center bg-gray-100 text-gray-400 text-xs">-</td>`;
+                } else {
+                    const paid = row.payments[m] || 0;
+                    const expected = row.expectedRent || 0;
+
+                    let bgClass = "bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer border border-red-100"; // Unpaid
+                    let icon = `<i class="fas fa-times-circle"></i>`;
+                    let diffText = ``;
+
+                    if (paid >= expected && expected > 0) {
+                        bgClass = "bg-green-50 hover:bg-green-100 text-green-700 cursor-pointer border border-green-100";
+                        icon = `<i class="fas fa-check-circle"></i>`;
+                    } else if (paid > 0) {
+                        bgClass = "bg-yellow-50 hover:bg-yellow-100 text-yellow-700 cursor-pointer border border-yellow-100";
+                        icon = `<i class="fas fa-exclamation-circle"></i>`;
+                        diffText = `<br><span class="text-[10px]">-$${(expected-paid).toFixed(2)}</span>`;
+                    }
+
+                    const monthName = new Date(currentRentRollYear, m, 1).toLocaleString('default', { month: 'short' });
+
+                    html += `<td class="p-1 text-center">
+                        <div class="h-full w-full rounded p-1.5 flex flex-col items-center justify-center ${bgClass}"
+                             onclick="openRentPaymentModal('${row.leaseId}', '${row.tenantId}', '${row.property}', '${row.tenantName}', ${m}, ${expected})">
+                             <div class="font-medium">$${paid.toFixed(0)}</div>
+                             ${diffText}
+                        </div>
+                    </td>`;
+                }
+            }
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function openRentPaymentModal(leaseId, tenantId, propertyName, tenantName, monthIndex, expectedRent) {
+        document.getElementById('rt-lease-id').value = leaseId;
+        document.getElementById('rt-tenant-id').value = tenantId;
+        document.getElementById('rt-month').value = monthIndex;
+        document.getElementById('rt-year').value = currentRentRollYear;
+
+        const monthName = new Date(currentRentRollYear, monthIndex, 1).toLocaleString('default', { month: 'long' });
+
+        document.getElementById('rt-tenant-prop-desc').innerHTML = `<strong>${tenantName}</strong> at <strong>${propertyName}</strong><br><span class="text-xs text-gray-500">Rent for ${monthName} ${currentRentRollYear}</span>`;
+
+        document.getElementById('rt-payment-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('rt-payment-amount').value = expectedRent.toFixed(2);
+        document.getElementById('rt-payment-mode').value = "";
+        document.getElementById('rt-payment-notes').value = `Rent payment for ${monthName} ${currentRentRollYear}`;
+
+        document.getElementById('rent-payment-modal').classList.remove('hidden');
+    }
+
+    function submitRentTrackingPayment(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submit-rt-payment-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
+        const payload = {
+            leaseId: document.getElementById('rt-lease-id').value,
+            tenantId: document.getElementById('rt-tenant-id').value,
+            date: document.getElementById('rt-payment-date').value,
+            transactionType: 'Rent',
+            chargeAmount: 0,
+            paymentAmount: parseFloat(document.getElementById('rt-payment-amount').value),
+            paymentMode: document.getElementById('rt-payment-mode').value,
+            notes: document.getElementById('rt-payment-notes').value,
+            rentMonth: parseInt(document.getElementById('rt-month').value),
+            rentYear: parseInt(document.getElementById('rt-year').value)
+        };
+
+        scriptRunner
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    showToast("Success", "Rent payment recorded.");
+                    closeRentPaymentModal();
+                    loadRentTrackingData(); // Refresh the table
+                } else {
+                    showToast("Error", res.error);
+                }
+            })
+            .recordLedgerEntry(payload);
+    }
+
+        // ==========================================
+        // SETTINGS CRUD: PROPERTIES
+        // ==========================================
+        function loadProperties() {
+            document.getElementById('properties-table-body').innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">Loading properties...</td></tr>';
+            scriptRunner.withSuccessHandler(renderProperties).getProperties();
+        }
+
+        function renderProperties(properties) {
+            const tbody = document.getElementById('properties-table-body');
+            if (!properties || properties.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">No properties found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = properties.map(p => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${p.propertyName}</td>
+                    <td class="py-3 px-4 text-gray-600">${p.ownerCompany || ''}</td>
+                    <td class="py-3 px-4 text-gray-600">${p.address || ''}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editProperty('${p.propertyName}', '${p.ownerCompany || ''}', '${p.address || ''}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Property"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteProperty('${p.propertyName}')" class="text-red-500 hover:text-red-700" title="Delete Property"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openPropertyModal() {
+            document.getElementById('property-form').reset();
+            document.getElementById('old-property-name').value = '';
+            document.getElementById('property-modal-title').innerText = 'Add Property';
+            document.getElementById('property-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('property-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closePropertyModal() {
+            document.getElementById('property-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('property-modal').classList.add('hidden'), 300);
+        }
+
+        function editProperty(name, owner, address) {
+            document.getElementById('old-property-name').value = name;
+            document.getElementById('prop-name').value = name;
+            document.getElementById('prop-owner').value = owner;
+            document.getElementById('prop-address').value = address;
+            document.getElementById('property-modal-title').innerText = 'Edit Property';
+            document.getElementById('property-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('property-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitProperty(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-property-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                oldPropertyName: document.getElementById('old-property-name').value,
+                propertyName: document.getElementById('prop-name').value,
+                ownerCompany: document.getElementById('prop-owner').value,
+                address: document.getElementById('prop-address').value
+            };
+
+            if (payload.oldPropertyName) {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    if (res.success) {
+                        closePropertyModal();
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    showToast("Error", err.message, "error");
+                }).updateProperty(payload);
+            } else {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    if (res.success) {
+                        closePropertyModal();
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    showToast("Error", err.message, "error");
+                }).addProperty(payload);
+            }
+        }
+
+        function deleteProperty(name) {
+            if (confirm(`Are you sure you want to delete property: ${name}?`)) {
+                scriptRunner.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteProperty(name);
+            }
+        }
+
+        // ==========================================
+        // SETTINGS CRUD: EMPLOYEES
+        // ==========================================
+        function loadEmployees() {
+            document.getElementById('employees-table-body').innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-500">Loading employees...</td></tr>';
+            scriptRunner.withSuccessHandler(renderEmployees).getEmployees();
+        }
+
+        function renderEmployees(employees) {
+            const tbody = document.getElementById('employees-table-body');
+            if (!employees || employees.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-500">No employees found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = employees.map(e => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${e.employeeId}</td>
+                    <td class="py-3 px-4 text-gray-800">${e.fullName}</td>
+                    <td class="py-3 px-4 text-gray-600">${e.email}</td>
+                    <td class="py-3 px-4 text-gray-600">$${parseFloat(e.hourlyPayRate||0).toFixed(2)}</td>
+                    <td class="py-3 px-4 text-gray-600">${e.role}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${e.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${e.status}</span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editEmployee('${e.employeeId}', '${e.fullName}', '${e.email}', '${e.hourlyPayRate}', '${e.role}', '${e.phoneNumber}', '${e.status}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Employee"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteEmployee('${e.employeeId}')" class="text-red-500 hover:text-red-700" title="Delete Employee"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openEmployeeModal() {
+            document.getElementById('employee-form').reset();
+            document.getElementById('emp-is-edit').value = 'false';
+            document.getElementById('emp-id').readOnly = false;
+            document.getElementById('employee-modal-title').innerText = 'Add Employee';
+            document.getElementById('employee-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('employee-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closeEmployeeModal() {
+            document.getElementById('employee-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('employee-modal').classList.add('hidden'), 300);
+        }
+
+        function editEmployee(id, name, email, rate, role, phone, status) {
+            document.getElementById('emp-is-edit').value = 'true';
+            document.getElementById('emp-id').value = id;
+            document.getElementById('emp-id').readOnly = true; // Don't allow changing ID on edit
+            document.getElementById('emp-name').value = name;
+            document.getElementById('emp-email').value = email;
+            document.getElementById('emp-rate').value = rate;
+            document.getElementById('emp-role').value = role;
+            document.getElementById('emp-phone').value = phone;
+            document.getElementById('emp-status').value = status;
+            document.getElementById('employee-modal-title').innerText = 'Edit Employee';
+            document.getElementById('employee-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('employee-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitEmployee(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-employee-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                employeeId: document.getElementById('emp-id').value,
+                fullName: document.getElementById('emp-name').value,
+                email: document.getElementById('emp-email').value,
+                hourlyPayRate: document.getElementById('emp-rate').value,
+                role: document.getElementById('emp-role').value,
+                phoneNumber: document.getElementById('emp-phone').value,
+                status: document.getElementById('emp-status').value
+            };
+
+            const isEdit = document.getElementById('emp-is-edit').value === 'true';
+
+            if (isEdit) {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    if (res.success) {
+                        closeEmployeeModal();
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    showToast("Error", err.message, "error");
+                }).updateEmployee(payload);
+            } else {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    if (res.success) {
+                        closeEmployeeModal();
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    showToast("Error", err.message, "error");
+                }).addEmployee(payload);
+            }
+        }
+
+        function deleteEmployee(id) {
+            if (confirm(`Are you sure you want to delete employee: ${id}?`)) {
+                scriptRunner.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteEmployee(id);
+            }
+        }
+
+        // ==========================================
+        // SETTINGS CRUD: TASKS
+        // ==========================================
+        function loadTasks() {
+            document.getElementById('tasks-table-body').innerHTML = '<tr><td colspan="2" class="py-6 text-center text-gray-500">Loading tasks...</td></tr>';
+            scriptRunner.withSuccessHandler(renderTasks).getTasks();
+        }
+
+        function renderTasks(tasks) {
+            const tbody = document.getElementById('tasks-table-body');
+            if (!tasks || tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" class="py-6 text-center text-gray-500">No tasks found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = tasks.map(t => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${t.taskName}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editTask('${t.taskName}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Task"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteTask('${t.taskName}')" class="text-red-500 hover:text-red-700" title="Delete Task"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openTaskModal() {
+            document.getElementById('task-form').reset();
+            document.getElementById('old-task-name').value = '';
+            document.getElementById('task-modal-title').innerText = 'Add Task Category';
+            document.getElementById('task-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('task-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closeTaskModal() {
+            document.getElementById('task-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('task-modal').classList.add('hidden'), 300);
+        }
+
+        function editTask(name) {
+            document.getElementById('old-task-name').value = name;
+            document.getElementById('task-name').value = name;
+            document.getElementById('task-modal-title').innerText = 'Edit Task Category';
+            document.getElementById('task-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('task-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitTask(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-task-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                oldTaskName: document.getElementById('old-task-name').value,
+                taskName: document.getElementById('task-name').value
+            };
+
+            if (payload.oldTaskName) {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    if (res.success) {
+                        closeTaskModal();
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    showToast("Error", err.message, "error");
+                }).updateTask(payload);
+            } else {
+                scriptRunner.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    if (res.success) {
+                        closeTaskModal();
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    showToast("Error", err.message, "error");
+                }).addTask(payload);
+            }
+        }
+
+        function deleteTask(name) {
+            if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
+                scriptRunner.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteTask(name);
+            }
+        }
+
 </script>

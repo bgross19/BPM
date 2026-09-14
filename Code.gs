@@ -760,28 +760,12 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
       });
     }
 
-    var threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    var includeArchive = false;
-    if (!startDate || startDate < threeMonthsAgo) {
-      includeArchive = true;
-    }
-
     // Read Work Logs
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
-    var archiveLaborSheet = includeArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
     var workLogs = [];
-
-    var laborData = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
       // Adjusted to read 11 columns to include Charge_Target
-      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
-    }
-    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
-    }
-
-    if (laborData.length > 0) {
+      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -832,18 +816,9 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
     // Read Material Expenses
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
-    var archiveMatSheet = includeArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
     var materials = [];
-
-    var matData = [];
     if (matSheet && matSheet.getLastRow() > 1) {
-      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
-    }
-    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
-      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
-    }
-
-    if (matData.length > 0) {
+      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1244,13 +1219,15 @@ function addLease(payload) {
 
     // Add tenants
     if (payload.tenants && payload.tenants.length > 0) {
+      var rentPortion = payload.monthlyRent / payload.tenants.length;
       payload.tenants.forEach(function(tenant) {
         var tenantId = "TNT-" + Utilities.getUuid().substring(0, 8).toUpperCase();
         tenantSheet.appendRow([
           tenantId,
           leaseId,
           tenant.name,
-          tenant.contactInfo
+          tenant.contactInfo,
+          tenant.rentPortion ? tenant.rentPortion : rentPortion
         ]);
       });
     }
@@ -1282,7 +1259,11 @@ function recordLedgerEntry(payload) {
       payload.date,
       payload.transactionType,
       payload.chargeAmount || 0,
-      payload.paymentAmount || 0
+      payload.paymentAmount || 0,
+      payload.paymentMode || "",
+      payload.notes || "",
+      payload.rentMonth !== undefined ? payload.rentMonth : "",
+      payload.rentYear !== undefined ? payload.rentYear : ""
     ]);
 
     return { success: true, message: "Ledger entry recorded successfully" };
@@ -1320,13 +1301,14 @@ function getLeasesAndTenants() {
     }
 
     if (tenantSheet && tenantSheet.getLastRow() > 1) {
-      var tenantData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 4).getValues();
+      var tenantData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 5).getValues();
       tenants = tenantData.map(function(row) {
         return {
           tenantId: row[0],
           leaseId: row[1],
           name: row[2],
-          contactInfo: row[3]
+          contactInfo: row[3],
+          rentPortion: row[4]
         };
       });
     }
@@ -1416,7 +1398,6 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('BPM App')
     .addItem('Setup Database Sheets', 'setupDatabase')
-    .addItem('Install Weekly Archiving Trigger', 'createWeeklyArchiveTrigger')
     .addToUi();
 }
 
@@ -1484,8 +1465,13 @@ function setupDatabase() {
     },
     {
       name: 'Properties',
-      headers: ['Property_Name'],
-      defaults: [['Alpha Phi'], ['4638 B'], ['645 Ber'], ['Company Office']]
+      headers: ['Property_Name', 'Owner_Company', 'Address'],
+      defaults: [
+        ['Alpha Phi', 'Greek Housing LLC', '123 Alpha St'],
+        ['4638 B', 'Beta Properties', '4638 B Ave'],
+        ['645 Ber', 'Beta Properties', '645 Ber St'],
+        ['Company Office', 'Internal', 'Main Office']
+      ]
     },
     {
       name: 'Tasks',
@@ -1510,7 +1496,8 @@ function setupDatabase() {
         'Tenant_ID',
         'Lease_ID',
         'Name',
-        'Contact_Info'
+        'Contact_Info',
+        'Rent_Portion'
       ]
     },
     {
@@ -1522,35 +1509,11 @@ function setupDatabase() {
         'Date',
         'Transaction_Type',
         'Charge_Amount',
-        'Payment_Amount'
-      ]
-    },
-    {
-      name: 'archive_fact_Work_Logs',
-      headers: [
-        'Work_Log_ID',
-        'Timestamp',
-        'Date_Completed',
-        'Employee_ID',
-        'Property_ID',
-        'Task_ID',
-        'Hours_Worked',
-        'Work_Notes',
-        'Payroll_Status',
-        'Billing_Status',
-        'Charge_Target'
-      ]
-    },
-    {
-      name: 'archive_fact_Material_Expenses',
-      headers: [
-        'Expense_ID',
-        'Work_Log_ID',
-        'Property_ID',
-        'Vendor_Name',
-        'Item_Description',
-        'Cost',
-        'Receipt_URL'
+        'Payment_Amount',
+        'Payment_Mode',
+        'Notes',
+        'Rent_Month',
+        'Rent_Year'
       ]
     }
   ];
@@ -1774,17 +1737,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var totalMaintOutstanding = 0;
     var arMaint = [];
 
-    var threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    var includeArchive = false;
-    if (startDate < threeMonthsAgo) {
-      includeArchive = true;
-    }
-
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
-    var archiveLaborSheet = includeArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
-    var archiveMatSheet = includeArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
     var ratesSheet = ss.getSheetByName('dim_Billing_Rates');
 
     var rateMap = {};
@@ -1801,15 +1755,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var logs = [];
     var materials = [];
 
-    var laborData = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
-    }
-    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
-    }
-
-    if (laborData.length > 0) {
+      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -1833,15 +1780,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
-    var matData = [];
     if (matSheet && matSheet.getLastRow() > 1) {
-      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
-    }
-    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
-      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
-    }
-
-    if (matData.length > 0) {
+      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1905,8 +1845,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
-    if (laborData.length > 0) {
-      var laborDataFull = laborData;
+    if (laborSheet && laborSheet.getLastRow() > 1) {
+      var laborDataFull = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
       laborDataFull.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var hours = parseFloat(row[6]) || 0;
@@ -1922,10 +1862,10 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     }
 
     var totalMaterialsPeriod = 0;
-    if (matData.length > 0) {
+    if (matSheet && matSheet.getLastRow() > 1) {
         var workLogDates = {};
-        if (laborData.length > 0) {
-            laborData.forEach(function(row) {
+        if (laborSheet && laborSheet.getLastRow() > 1) {
+            laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 3).getValues().forEach(function(row) {
                 workLogDates[row[0]] = new Date(row[2]);
             });
         }
@@ -2012,131 +1952,353 @@ function markPropertyPaid(propertyId) {
     lock.releaseLock();
   }
 }
-// 15. AUTOMATED ARCHIVING
-function archiveOldData() {
-  var lock = LockService.getScriptLock();
+// 17. GET RENT ROLL DATA FOR RENT TRACKING
+function getRentRollData(year) {
   try {
-    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var propSheet = ss.getSheetByName('Properties');
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    var tenantSheet = ss.getSheetByName('dim_Tenants');
+    var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
 
-    var laborSheet = ss.getSheetByName('fact_Work_Logs');
-    var archiveLaborSheet = ss.getSheetByName('archive_fact_Work_Logs');
-
-    var matSheet = ss.getSheetByName('fact_Material_Expenses');
-    var archiveMatSheet = ss.getSheetByName('archive_fact_Material_Expenses');
-
-    if (!laborSheet || !archiveLaborSheet || !matSheet || !archiveMatSheet) {
-      throw new Error("Missing required sheets for archiving. Please run setupDatabase().");
+    var props = [];
+    if (propSheet && propSheet.getLastRow() > 1) {
+      var pData = propSheet.getRange(2, 1, propSheet.getLastRow() - 1, 3).getValues();
+      pData.forEach(function(row) {
+        props.push({ name: row[0], owner: row[1] || "", address: row[2] || "" });
+      });
     }
 
-    var lastLaborRow = laborSheet.getLastRow();
-    if (lastLaborRow <= 1) return { success: true, message: "No data to archive." };
-
-    var cutoffDate = new Date();
-    cutoffDate.setMonth(cutoffDate.getMonth() - 3);
-
-    var laborData = laborSheet.getRange(2, 1, lastLaborRow - 1, laborSheet.getLastColumn()).getValues();
-
-    var logsToArchive = [];
-    var rowIndicesToDelete = [];
-    var archivedWorkLogIds = {};
-
-    for (var i = 0; i < laborData.length; i++) {
-      var row = laborData[i];
-      var workLogId = row[0];
-      var rawDate = row[2];
-      var payrollStatus = (row[8] || '').toString().trim().toLowerCase();
-      var billingStatus = (row[9] || '').toString().trim().toLowerCase();
-
-      var logDate = null;
-      if (rawDate instanceof Date) {
-        logDate = rawDate;
-      } else if (rawDate) {
-        logDate = new Date(rawDate);
-      }
-
-      if (logDate && logDate < cutoffDate && payrollStatus === 'paid' && billingStatus === 'paid') {
-        logsToArchive.push(row);
-        rowIndicesToDelete.push(i + 2); // 1-based index, shifted for header
-        archivedWorkLogIds[workLogId] = true;
-      }
+    var leases = [];
+    if (leaseSheet && leaseSheet.getLastRow() > 1) {
+      var lData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+      lData.forEach(function(row) {
+        leases.push({ leaseId: row[0], propertyId: row[1], startDate: new Date(row[2]), endDate: new Date(row[3]), monthlyRent: row[4], status: row[6] });
+      });
     }
 
-    var activeLogs = [];
-    for (var m = 0; m < laborData.length; m++) {
-        if (!rowIndicesToDelete.includes(m + 2)) {
-            activeLogs.push(laborData[m]);
-        }
+    var tenants = [];
+    if (tenantSheet && tenantSheet.getLastRow() > 1) {
+      var tData = tenantSheet.getRange(2, 1, tenantSheet.getLastRow() - 1, 5).getValues();
+      tData.forEach(function(row) {
+        tenants.push({ tenantId: row[0], leaseId: row[1], name: row[2], rentPortion: row[4] });
+      });
     }
 
-    if (logsToArchive.length > 0) {
-      // Archive logs
-      archiveLaborSheet.getRange(archiveLaborSheet.getLastRow() + 1, 1, logsToArchive.length, logsToArchive[0].length).setValues(logsToArchive);
-
-      // Bulk update active sheet
-      laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, laborSheet.getLastColumn()).clearContent();
-      if (activeLogs.length > 0) {
-          laborSheet.getRange(2, 1, activeLogs.length, activeLogs[0].length).setValues(activeLogs);
-      }
-    }
-
-    // Process Materials
-    var lastMatRow = matSheet.getLastRow();
-    if (lastMatRow > 1) {
-      var matData = matSheet.getRange(2, 1, lastMatRow - 1, matSheet.getLastColumn()).getValues();
-      var matsToArchive = [];
-      var matRowIndicesToDelete = [];
-
-      for (var j = 0; j < matData.length; j++) {
-        var matRow = matData[j];
-        var matWorkLogId = matRow[1];
-
-        if (archivedWorkLogIds[matWorkLogId]) {
-          matsToArchive.push(matRow);
-          matRowIndicesToDelete.push(j + 2);
-        }
-      }
-
-      var activeMats = [];
-      for (var n = 0; n < matData.length; n++) {
-          if (!matRowIndicesToDelete.includes(n + 2)) {
-              activeMats.push(matData[n]);
+    var ledgers = [];
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var ldData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 11).getValues();
+      ldData.forEach(function(row) {
+        if (row[4] === 'Rent' && (parseFloat(row[6]) > 0)) {
+          var rentM = row[9] !== "" ? parseInt(row[9]) : new Date(row[3]).getMonth();
+          var rentY = row[10] !== "" ? parseInt(row[10]) : new Date(row[3]).getFullYear();
+          if (rentY == year) {
+            ledgers.push({ leaseId: row[1], tenantId: row[2], date: new Date(row[3]), rentMonth: rentM, rentYear: rentY, amount: parseFloat(row[6]) });
           }
-      }
-
-      if (matsToArchive.length > 0) {
-        archiveMatSheet.getRange(archiveMatSheet.getLastRow() + 1, 1, matsToArchive.length, matsToArchive[0].length).setValues(matsToArchive);
-
-        // Bulk update active sheet
-        matSheet.getRange(2, 1, matSheet.getLastRow() - 1, matSheet.getLastColumn()).clearContent();
-        if (activeMats.length > 0) {
-            matSheet.getRange(2, 1, activeMats.length, activeMats[0].length).setValues(activeMats);
         }
-      }
+      });
     }
 
-    return { success: true, archivedLogs: logsToArchive.length, message: "Archived " + logsToArchive.length + " logs." };
-  } catch (error) {
-    return { success: false, error: error.message };
-  } finally {
-    lock.releaseLock();
+    var rentRoll = [];
+
+    // Build rows for each tenant in active leases for the year
+    tenants.forEach(function(tenant) {
+      var lease = leases.find(function(l) { return l.leaseId === tenant.leaseId; });
+      if (!lease) return;
+
+      // Check if lease is active in the given year
+      if (lease.startDate.getFullYear() > year || lease.endDate.getFullYear() < year) return;
+
+      var prop = props.find(function(p) { return p.name === lease.propertyId; });
+      var propName = prop ? prop.name : lease.propertyId;
+      var propOwner = prop ? prop.owner : "";
+      var propAddress = prop ? prop.address : "";
+
+      var row = {
+        leaseId: lease.leaseId,
+        tenantId: tenant.tenantId,
+        property: propName,
+        owner: propOwner,
+        address: propAddress,
+        tenantName: tenant.name,
+        expectedRent: tenant.rentPortion,
+        payments: { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0 },
+        activeMonths: { 0:false, 1:false, 2:false, 3:false, 4:false, 5:false, 6:false, 7:false, 8:false, 9:false, 10:false, 11:false }
+      };
+
+      // Figure out which months the lease is active
+      for (var m = 0; m < 12; m++) {
+        var startOfM = new Date(year, m, 1);
+        var endOfM = new Date(year, m + 1, 0);
+        if (startOfM <= lease.endDate && endOfM >= lease.startDate) {
+          row.activeMonths[m] = true;
+        }
+      }
+
+      // Sum payments by month
+      var tLedgers = ledgers.filter(function(ld) { return ld.tenantId === tenant.tenantId && ld.leaseId === tenant.leaseId; });
+      tLedgers.forEach(function(ld) {
+        var m = ld.rentMonth;
+        if (m >= 0 && m < 12) {
+          row.payments[m] += ld.amount;
+        }
+      });
+
+      rentRoll.push(row);
+    });
+
+    return { success: true, data: rentRoll };
+  } catch(e) {
+    return { success: false, error: e.message };
   }
 }
-function createWeeklyArchiveTrigger() {
-  // First, delete any existing triggers for this function to avoid duplicates
-  var triggers = ScriptApp.getProjectTriggers();
-  for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'archiveOldData') {
-      ScriptApp.deleteTrigger(triggers[i]);
-    }
+
+// Properties CRUD
+
+function _isAdminOrOwner() {
+  var activeUser = getUserRole();
+  return activeUser.role === 'admin' || activeUser.role === 'owner';
+}
+
+function getProperties() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    return data.map(function(row) {
+      return { propertyName: row[0], ownerCompany: row[1], address: row[2] };
+    });
+  } catch (error) {
+    return [];
   }
+}
 
-  // Create a new trigger to run every week on Sunday at 1 AM
-  ScriptApp.newTrigger('archiveOldData')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
-    .atHour(1)
-    .create();
+function addProperty(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    sheet.appendRow([payload.propertyName, payload.ownerCompany || "", payload.address || ""]);
+    return { success: true, message: "Property added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
-  SpreadsheetApp.getUi().alert('Weekly archiving trigger has been successfully installed. It will run every Sunday at 1 AM.');
+function updateProperty(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No properties to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.oldPropertyName) {
+        sheet.getRange(i + 2, 1, 1, 3).setValues([[payload.propertyName, payload.ownerCompany || "", payload.address || ""]]);
+        return { success: true, message: "Property updated" };
+      }
+    }
+    throw new Error("Property not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteProperty(propertyName) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No properties to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === propertyName) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Property deleted" };
+      }
+    }
+    throw new Error("Property not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Employees CRUD
+function getEmployees() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    return data.map(function(row) {
+      return {
+        employeeId: row[0],
+        fullName: row[1],
+        email: row[2],
+        hourlyPayRate: row[3],
+        role: row[4],
+        phoneNumber: row[5],
+        status: row[6]
+      };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function addEmployee(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var newId = payload.employeeId || ("EMP-" + Utilities.getUuid().substring(0, 5).toUpperCase());
+    sheet.appendRow([
+      newId,
+      payload.fullName || "",
+      payload.email || "",
+      payload.hourlyPayRate || 0,
+      payload.role || "Field Crew",
+      payload.phoneNumber || "",
+      payload.status || "Active"
+    ]);
+    return { success: true, message: "Employee added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateEmployee(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No employees to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.employeeId) {
+        sheet.getRange(i + 2, 1, 1, 7).setValues([[
+          payload.employeeId,
+          payload.fullName || "",
+          payload.email || "",
+          payload.hourlyPayRate || 0,
+          payload.role || "Field Crew",
+          payload.phoneNumber || "",
+          payload.status || "Active"
+        ]]);
+        return { success: true, message: "Employee updated" };
+      }
+    }
+    throw new Error("Employee not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteEmployee(employeeId) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No employees to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === employeeId) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Employee deleted" };
+      }
+    }
+    throw new Error("Employee not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Tasks CRUD
+function getTasks() {
+  if (!_isAdminOrOwner()) return [];
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    return data.map(function(row) {
+      return { taskName: row[0] };
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function addTask(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    sheet.appendRow([payload.taskName]);
+    return { success: true, message: "Task added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateTask(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No tasks to update");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === payload.oldTaskName) {
+        sheet.getRange(i + 2, 1, 1, 1).setValues([[payload.taskName]]);
+        return { success: true, message: "Task updated" };
+      }
+    }
+    throw new Error("Task not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteTask(taskName) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No tasks to delete");
+    var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === taskName) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "Task deleted" };
+      }
+    }
+    throw new Error("Task not found");
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
