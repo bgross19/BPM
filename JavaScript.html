@@ -999,7 +999,7 @@
             const startDate = document.getElementById('dash-start-date').value;
             const endDate = document.getElementById('dash-end-date').value;
 
-            google.script.run
+            scriptRunner
                 .withSuccessHandler(function(response) {
                     if (response.success) {
                         updateDashboardUI(response.data);
@@ -1101,7 +1101,7 @@
         function markPropPaid(propertyId) {
             if (!confirm(`Mark outstanding maintenance for ${propertyId} as PAID?`)) return;
 
-            google.script.run
+            scriptRunner
                 .withSuccessHandler(function(res) {
                     if(res.success) {
                         alert(res.message);
@@ -1115,7 +1115,6 @@
 
 
 
-<script>
     var globalLeases = [];
     var globalTenants = [];
 
@@ -1173,7 +1172,7 @@
             tenants: tenants
         };
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1195,7 +1194,7 @@
     }
 
     function loadLeasesAndTenants() {
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 if (res.success) {
                     globalLeases = res.leases || [];
@@ -1243,7 +1242,7 @@
         });
 
         // Fetch balance
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 if(res.success) {
                     balanceDisplay.classList.remove('hidden');
@@ -1267,7 +1266,7 @@
         const monthYear = document.getElementById('os-month').value;
         const feePercent = parseFloat(document.getElementById('os-fee').value);
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1299,7 +1298,7 @@
         const monthYear = document.getElementById('os-month').value;
         const feePercent = parseFloat(document.getElementById('os-fee').value);
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1333,7 +1332,7 @@
 
         const leaseId = document.getElementById('sd-lease-select').value;
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1362,7 +1361,7 @@
 
         const leaseId = document.getElementById('sd-lease-select').value;
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1411,7 +1410,7 @@
             paymentAmount: nature === 'payment' ? amount : 0
         };
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1448,7 +1447,7 @@
         const tbody = document.getElementById('rent-tracking-tbody');
         tbody.innerHTML = '<tr><td colspan="17" class="text-center py-4 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading rent roll data...</td></tr>';
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 if(res.success) {
                     currentRentRollData = res.data;
@@ -1593,7 +1592,7 @@
             rentYear: parseInt(document.getElementById('rt-year').value)
         };
 
-        google.script.run
+        scriptRunner
             .withSuccessHandler(function(res) {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -1613,7 +1612,7 @@
         // ==========================================
         function loadProperties() {
             document.getElementById('properties-table-body').innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">Loading properties...</td></tr>';
-            google.script.run.withSuccessHandler(renderProperties).getProperties();
+            scriptRunner.withSuccessHandler(renderProperties).getProperties();
         }
 
         function renderProperties(properties) {
@@ -1671,7 +1670,7 @@
             };
 
             if (payload.oldPropertyName) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
                     if (res.success) {
                         closePropertyModal();
@@ -1685,7 +1684,7 @@
                     showToast("Error", err.message, "error");
                 }).updateProperty(payload);
             } else {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
                     if (res.success) {
                         closePropertyModal();
@@ -1703,7 +1702,7 @@
 
         function deleteProperty(name) {
             if (confirm(`Are you sure you want to delete property: ${name}?`)) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     if (res.success) {
                         showToast("Success", res.message, "success");
                         loadProperties();
@@ -1721,7 +1720,7 @@
         // ==========================================
         function loadEmployees() {
             document.getElementById('employees-table-body').innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-500">Loading employees...</td></tr>';
-            google.script.run.withSuccessHandler(renderEmployees).getEmployees();
+            scriptRunner.withSuccessHandler(renderEmployees).getEmployees();
         }
 
         function renderEmployees(employees) {
@@ -1795,7 +1794,7 @@
             const isEdit = document.getElementById('emp-is-edit').value === 'true';
 
             if (isEdit) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
                     if (res.success) {
                         closeEmployeeModal();
@@ -1809,7 +1808,7 @@
                     showToast("Error", err.message, "error");
                 }).updateEmployee(payload);
             } else {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
                     if (res.success) {
                         closeEmployeeModal();
@@ -1827,7 +1826,7 @@
 
         function deleteEmployee(id) {
             if (confirm(`Are you sure you want to delete employee: ${id}?`)) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     if (res.success) {
                         showToast("Success", res.message, "success");
                         loadEmployees();
@@ -1845,7 +1844,7 @@
         // ==========================================
         function loadTasks() {
             document.getElementById('tasks-table-body').innerHTML = '<tr><td colspan="2" class="py-6 text-center text-gray-500">Loading tasks...</td></tr>';
-            google.script.run.withSuccessHandler(renderTasks).getTasks();
+            scriptRunner.withSuccessHandler(renderTasks).getTasks();
         }
 
         function renderTasks(tasks) {
@@ -1897,7 +1896,7 @@
             };
 
             if (payload.oldTaskName) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
                     if (res.success) {
                         closeTaskModal();
@@ -1911,7 +1910,7 @@
                     showToast("Error", err.message, "error");
                 }).updateTask(payload);
             } else {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
                     if (res.success) {
                         closeTaskModal();
@@ -1929,7 +1928,7 @@
 
         function deleteTask(name) {
             if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
-                google.script.run.withSuccessHandler(res => {
+                scriptRunner.withSuccessHandler(res => {
                     if (res.success) {
                         showToast("Success", res.message, "success");
                         loadTasks();
