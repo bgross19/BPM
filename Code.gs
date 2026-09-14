@@ -724,6 +724,14 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
     var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : null;
     var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : null;
 
+    var cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+
+    var pullArchive = false;
+    if (!startDate || startDate < cutoffDate) {
+      pullArchive = true;
+    }
+
     // Build Employee Lookup Dictionary
     var empSheet = ss.getSheetByName('dim_Employees');
     var employeeMap = {};
@@ -762,10 +770,20 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
     // Read Work Logs
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var archiveLaborSheet = pullArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
+
     var workLogs = [];
+    var laborData = [];
+
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      // Adjusted to read 11 columns to include Charge_Target
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+    }
+
+    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+    }
+
+    if (laborData.length > 0) {
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -816,9 +834,20 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
     // Read Material Expenses
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveMatSheet = pullArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
+
     var materials = [];
+    var matData = [];
+
     if (matSheet && matSheet.getLastRow() > 1) {
-      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
+    }
+
+    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
+      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
+    }
+
+    if (matData.length > 0) {
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1398,7 +1427,132 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('BPM App')
     .addItem('Setup Database Sheets', 'setupDatabase')
+    .addItem('Install Weekly Archiving Trigger', 'createWeeklyArchiveTrigger')
     .addToUi();
+}
+
+function createWeeklyArchiveTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'archiveOldData') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  ScriptApp.newTrigger('archiveOldData')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(1)
+    .create();
+
+  SpreadsheetApp.getUi().alert('Weekly archiving trigger successfully installed! It will run every Sunday at 1 AM.');
+}
+
+function archiveOldData() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // 30 seconds
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Calculate the cutoff date (3 months ago)
+    var cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveLaborSheet = ss.getSheetByName('archive_fact_Work_Logs');
+    var archiveMatSheet = ss.getSheetByName('archive_fact_Material_Expenses');
+
+    if (!laborSheet || !matSheet || !archiveLaborSheet || !archiveMatSheet) {
+      console.error("One or more required sheets for archiving are missing.");
+      return;
+    }
+
+    var laborLastRow = laborSheet.getLastRow();
+    var matLastRow = matSheet.getLastRow();
+
+    if (laborLastRow <= 1) {
+      return; // Nothing to archive
+    }
+
+    var laborRange = laborSheet.getRange(2, 1, laborLastRow - 1, laborSheet.getLastColumn());
+    var laborData = laborRange.getValues();
+
+    var matData = [];
+    if (matLastRow > 1) {
+      matData = matSheet.getRange(2, 1, matLastRow - 1, matSheet.getLastColumn()).getValues();
+    }
+
+    var archivedLaborData = [];
+    var activeLaborData = [];
+    var archivedWorkLogIds = {};
+
+    // 2. Identify work logs to archive
+    for (var i = 0; i < laborData.length; i++) {
+      var row = laborData[i];
+      var logDate = new Date(row[2]); // Date_Completed
+      var payrollStatus = (row[8] || '').toString().trim().toLowerCase();
+      var billingStatus = (row[9] || '').toString().trim().toLowerCase();
+
+      if (logDate < cutoffDate && payrollStatus === 'paid' && billingStatus === 'paid') {
+        archivedLaborData.push(row);
+        archivedWorkLogIds[row[0]] = true; // Store Work_Log_ID
+      } else {
+        activeLaborData.push(row);
+      }
+    }
+
+    // 3. Identify materials to archive based on archived work log IDs
+    var archivedMatData = [];
+    var activeMatData = [];
+
+    for (var j = 0; j < matData.length; j++) {
+      var mRow = matData[j];
+      var wLogId = mRow[1]; // Work_Log_ID
+
+      if (archivedWorkLogIds[wLogId]) {
+        archivedMatData.push(mRow);
+      } else {
+        activeMatData.push(mRow);
+      }
+    }
+
+    // 4. Append to archive sheets using bulk setValues
+    if (archivedLaborData.length > 0) {
+      var archLaborLastRow = archiveLaborSheet.getLastRow();
+      archiveLaborSheet.getRange(archLaborLastRow + 1, 1, archivedLaborData.length, archivedLaborData[0].length).setValues(archivedLaborData);
+    }
+
+    if (archivedMatData.length > 0) {
+      var archMatLastRow = archiveMatSheet.getLastRow();
+      archiveMatSheet.getRange(archMatLastRow + 1, 1, archivedMatData.length, archivedMatData[0].length).setValues(archivedMatData);
+    }
+
+    // 5. Rewrite active data to original sheets to remove archived rows efficiently
+    if (archivedLaborData.length > 0 || archivedMatData.length > 0) {
+      // Clear content but preserve headers (row 2 and below)
+      if (laborLastRow > 1) {
+        laborSheet.getRange(2, 1, laborLastRow - 1, laborSheet.getLastColumn()).clearContent();
+      }
+      if (matLastRow > 1) {
+        matSheet.getRange(2, 1, matLastRow - 1, matSheet.getLastColumn()).clearContent();
+      }
+
+      // Write back active data
+      if (activeLaborData.length > 0) {
+        laborSheet.getRange(2, 1, activeLaborData.length, activeLaborData[0].length).setValues(activeLaborData);
+      }
+      if (activeMatData.length > 0) {
+        matSheet.getRange(2, 1, activeMatData.length, activeMatData[0].length).setValues(activeMatData);
+      }
+    }
+
+  } catch (error) {
+    console.error("Error during archiving: " + error.message);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -1410,6 +1564,22 @@ function setupDatabase() {
   var schema = [
     {
       name: 'fact_Work_Logs',
+      headers: [
+        'Work_Log_ID',
+        'Timestamp',
+        'Date_Completed',
+        'Employee_ID',
+        'Property_ID',
+        'Task_ID',
+        'Hours_Worked',
+        'Work_Notes',
+        'Payroll_Status',
+        'Billing_Status',
+        'Charge_Target'
+      ]
+    },
+    {
+      name: 'archive_fact_Work_Logs',
       headers: [
         'Work_Log_ID',
         'Timestamp',
@@ -1437,6 +1607,18 @@ function setupDatabase() {
     },
     {
       name: 'fact_Material_Expenses',
+      headers: [
+        'Expense_ID',
+        'Work_Log_ID',
+        'Property_ID',
+        'Vendor_Name',
+        'Item_Description',
+        'Cost',
+        'Receipt_URL'
+      ]
+    },
+    {
+      name: 'archive_fact_Material_Expenses',
       headers: [
         'Expense_ID',
         'Work_Log_ID',
@@ -1654,6 +1836,11 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
+    var cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+
+    var pullArchive = startDate < cutoffDate;
+
     // 1. RENT METRICS
     var leaseSheet = ss.getSheetByName('fact_Leases');
     var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
@@ -1738,7 +1925,11 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var arMaint = [];
 
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var archiveLaborSheet = pullArchive ? ss.getSheetByName('archive_fact_Work_Logs') : null;
+
     var matSheet = ss.getSheetByName('fact_Material_Expenses');
+    var archiveMatSheet = pullArchive ? ss.getSheetByName('archive_fact_Material_Expenses') : null;
+
     var ratesSheet = ss.getSheetByName('dim_Billing_Rates');
 
     var rateMap = {};
@@ -1752,11 +1943,26 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
+    var laborData = [];
+    if (laborSheet && laborSheet.getLastRow() > 1) {
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+    }
+    if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+    }
+
+    var matData = [];
+    if (matSheet && matSheet.getLastRow() > 1) {
+      matData = matData.concat(matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues());
+    }
+    if (archiveMatSheet && archiveMatSheet.getLastRow() > 1) {
+      matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
+    }
+
     var logs = [];
     var materials = [];
 
-    if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
+    if (laborData.length > 0) {
       laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var taskId = (row[5] || '').toString().trim();
@@ -1780,8 +1986,7 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
-    if (matSheet && matSheet.getLastRow() > 1) {
-      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+    if (matData.length > 0) {
       matData.forEach(function(row) {
         materials.push({
           expenseId: row[0],
@@ -1845,9 +2050,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
-    if (laborSheet && laborSheet.getLastRow() > 1) {
-      var laborDataFull = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
-      laborDataFull.forEach(function(row) {
+    if (laborData.length > 0) {
+      laborData.forEach(function(row) {
         var empId = (row[3] || '').toString().trim();
         var hours = parseFloat(row[6]) || 0;
         var logDate = new Date(row[2]);
@@ -1862,10 +2066,10 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     }
 
     var totalMaterialsPeriod = 0;
-    if (matSheet && matSheet.getLastRow() > 1) {
+    if (matData.length > 0) {
         var workLogDates = {};
-        if (laborSheet && laborSheet.getLastRow() > 1) {
-            laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 3).getValues().forEach(function(row) {
+        if (laborData.length > 0) {
+            laborData.forEach(function(row) {
                 workLogDates[row[0]] = new Date(row[2]);
             });
         }
