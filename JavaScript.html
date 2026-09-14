@@ -234,7 +234,13 @@
             document.getElementById(tabId).classList.remove('hidden');
 
             if (tabId === 'settings-view') {
-                loadRates();
+                // Default to first subtab if none selected
+                if (document.getElementById('billing-rates-sub').classList.contains('hidden') &&
+                    document.getElementById('properties-sub').classList.contains('hidden') &&
+                    document.getElementById('employees-sub').classList.contains('hidden') &&
+                    document.getElementById('tasks-sub').classList.contains('hidden')) {
+                    switchSettingsSubTab('billing-rates-sub');
+                }
             } else if (tabId === 'dashboard-view') {
                 loadDashboardData();
             }
@@ -248,6 +254,38 @@
                 loadEmployeeHistory();
             } else if(tabId === 'admin-view') {
                 loadAdminDashboardData();
+            }
+        }
+
+        // SETTINGS SUB TAB LOGIC
+        function switchSettingsSubTab(subTabId) {
+            ['billing-rates-sub', 'properties-sub', 'employees-sub', 'tasks-sub'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+
+            ['tab-billing-rates-sub', 'tab-properties-sub', 'tab-employees-sub', 'tab-tasks-sub'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('bg-blue-50', 'text-blue-700');
+                    el.classList.add('text-gray-600', 'hover:bg-gray-50');
+                }
+            });
+
+            document.getElementById(subTabId).classList.remove('hidden');
+            const tabBtn = document.getElementById(`tab-${subTabId}`);
+            if (tabBtn) {
+                tabBtn.classList.remove('text-gray-600', 'hover:bg-gray-50');
+                tabBtn.classList.add('bg-blue-50', 'text-blue-700');
+            }
+
+            if (subTabId === 'billing-rates-sub') {
+                loadRates();
+            } else if (subTabId === 'properties-sub') {
+                loadProperties();
+            } else if (subTabId === 'employees-sub') {
+                loadEmployees();
+            } else if (subTabId === 'tasks-sub') {
+                loadTasks();
             }
         }
 
@@ -1076,7 +1114,6 @@
         }
 
 
-</script>
 
 <script>
     var globalLeases = [];
@@ -1570,4 +1607,339 @@
             })
             .recordLedgerEntry(payload);
     }
+
+        // ==========================================
+        // SETTINGS CRUD: PROPERTIES
+        // ==========================================
+        function loadProperties() {
+            document.getElementById('properties-table-body').innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">Loading properties...</td></tr>';
+            google.script.run.withSuccessHandler(renderProperties).getProperties();
+        }
+
+        function renderProperties(properties) {
+            const tbody = document.getElementById('properties-table-body');
+            if (!properties || properties.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">No properties found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = properties.map(p => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${p.propertyName}</td>
+                    <td class="py-3 px-4 text-gray-600">${p.ownerCompany || ''}</td>
+                    <td class="py-3 px-4 text-gray-600">${p.address || ''}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editProperty('${p.propertyName}', '${p.ownerCompany || ''}', '${p.address || ''}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Property"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteProperty('${p.propertyName}')" class="text-red-500 hover:text-red-700" title="Delete Property"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openPropertyModal() {
+            document.getElementById('property-form').reset();
+            document.getElementById('old-property-name').value = '';
+            document.getElementById('property-modal-title').innerText = 'Add Property';
+            document.getElementById('property-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('property-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closePropertyModal() {
+            document.getElementById('property-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('property-modal').classList.add('hidden'), 300);
+        }
+
+        function editProperty(name, owner, address) {
+            document.getElementById('old-property-name').value = name;
+            document.getElementById('prop-name').value = name;
+            document.getElementById('prop-owner').value = owner;
+            document.getElementById('prop-address').value = address;
+            document.getElementById('property-modal-title').innerText = 'Edit Property';
+            document.getElementById('property-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('property-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitProperty(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-property-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                oldPropertyName: document.getElementById('old-property-name').value,
+                propertyName: document.getElementById('prop-name').value,
+                ownerCompany: document.getElementById('prop-owner').value,
+                address: document.getElementById('prop-address').value
+            };
+
+            if (payload.oldPropertyName) {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    if (res.success) {
+                        closePropertyModal();
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    showToast("Error", err.message, "error");
+                }).updateProperty(payload);
+            } else {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    if (res.success) {
+                        closePropertyModal();
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
+                    showToast("Error", err.message, "error");
+                }).addProperty(payload);
+            }
+        }
+
+        function deleteProperty(name) {
+            if (confirm(`Are you sure you want to delete property: ${name}?`)) {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadProperties();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteProperty(name);
+            }
+        }
+
+        // ==========================================
+        // SETTINGS CRUD: EMPLOYEES
+        // ==========================================
+        function loadEmployees() {
+            document.getElementById('employees-table-body').innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-500">Loading employees...</td></tr>';
+            google.script.run.withSuccessHandler(renderEmployees).getEmployees();
+        }
+
+        function renderEmployees(employees) {
+            const tbody = document.getElementById('employees-table-body');
+            if (!employees || employees.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-gray-500">No employees found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = employees.map(e => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${e.employeeId}</td>
+                    <td class="py-3 px-4 text-gray-800">${e.fullName}</td>
+                    <td class="py-3 px-4 text-gray-600">${e.email}</td>
+                    <td class="py-3 px-4 text-gray-600">$${parseFloat(e.hourlyPayRate||0).toFixed(2)}</td>
+                    <td class="py-3 px-4 text-gray-600">${e.role}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${e.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${e.status}</span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editEmployee('${e.employeeId}', '${e.fullName}', '${e.email}', '${e.hourlyPayRate}', '${e.role}', '${e.phoneNumber}', '${e.status}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Employee"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteEmployee('${e.employeeId}')" class="text-red-500 hover:text-red-700" title="Delete Employee"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openEmployeeModal() {
+            document.getElementById('employee-form').reset();
+            document.getElementById('emp-is-edit').value = 'false';
+            document.getElementById('emp-id').readOnly = false;
+            document.getElementById('employee-modal-title').innerText = 'Add Employee';
+            document.getElementById('employee-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('employee-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closeEmployeeModal() {
+            document.getElementById('employee-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('employee-modal').classList.add('hidden'), 300);
+        }
+
+        function editEmployee(id, name, email, rate, role, phone, status) {
+            document.getElementById('emp-is-edit').value = 'true';
+            document.getElementById('emp-id').value = id;
+            document.getElementById('emp-id').readOnly = true; // Don't allow changing ID on edit
+            document.getElementById('emp-name').value = name;
+            document.getElementById('emp-email').value = email;
+            document.getElementById('emp-rate').value = rate;
+            document.getElementById('emp-role').value = role;
+            document.getElementById('emp-phone').value = phone;
+            document.getElementById('emp-status').value = status;
+            document.getElementById('employee-modal-title').innerText = 'Edit Employee';
+            document.getElementById('employee-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('employee-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitEmployee(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-employee-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                employeeId: document.getElementById('emp-id').value,
+                fullName: document.getElementById('emp-name').value,
+                email: document.getElementById('emp-email').value,
+                hourlyPayRate: document.getElementById('emp-rate').value,
+                role: document.getElementById('emp-role').value,
+                phoneNumber: document.getElementById('emp-phone').value,
+                status: document.getElementById('emp-status').value
+            };
+
+            const isEdit = document.getElementById('emp-is-edit').value === 'true';
+
+            if (isEdit) {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    if (res.success) {
+                        closeEmployeeModal();
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    showToast("Error", err.message, "error");
+                }).updateEmployee(payload);
+            } else {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    if (res.success) {
+                        closeEmployeeModal();
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
+                    showToast("Error", err.message, "error");
+                }).addEmployee(payload);
+            }
+        }
+
+        function deleteEmployee(id) {
+            if (confirm(`Are you sure you want to delete employee: ${id}?`)) {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadEmployees();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteEmployee(id);
+            }
+        }
+
+        // ==========================================
+        // SETTINGS CRUD: TASKS
+        // ==========================================
+        function loadTasks() {
+            document.getElementById('tasks-table-body').innerHTML = '<tr><td colspan="2" class="py-6 text-center text-gray-500">Loading tasks...</td></tr>';
+            google.script.run.withSuccessHandler(renderTasks).getTasks();
+        }
+
+        function renderTasks(tasks) {
+            const tbody = document.getElementById('tasks-table-body');
+            if (!tasks || tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" class="py-6 text-center text-gray-500">No tasks found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = tasks.map(t => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-4 text-gray-800 font-medium">${t.taskName}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editTask('${t.taskName}')" class="text-blue-500 hover:text-blue-700 mr-2" title="Edit Task"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteTask('${t.taskName}')" class="text-red-500 hover:text-red-700" title="Delete Task"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openTaskModal() {
+            document.getElementById('task-form').reset();
+            document.getElementById('old-task-name').value = '';
+            document.getElementById('task-modal-title').innerText = 'Add Task Category';
+            document.getElementById('task-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('task-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function closeTaskModal() {
+            document.getElementById('task-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('task-modal').classList.add('hidden'), 300);
+        }
+
+        function editTask(name) {
+            document.getElementById('old-task-name').value = name;
+            document.getElementById('task-name').value = name;
+            document.getElementById('task-modal-title').innerText = 'Edit Task Category';
+            document.getElementById('task-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('task-modal').classList.remove('opacity-0'), 10);
+        }
+
+        function submitTask(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-task-btn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            const payload = {
+                oldTaskName: document.getElementById('old-task-name').value,
+                taskName: document.getElementById('task-name').value
+            };
+
+            if (payload.oldTaskName) {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    if (res.success) {
+                        closeTaskModal();
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    showToast("Error", err.message, "error");
+                }).updateTask(payload);
+            } else {
+                google.script.run.withSuccessHandler(res => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    if (res.success) {
+                        closeTaskModal();
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
+                    showToast("Error", err.message, "error");
+                }).addTask(payload);
+            }
+        }
+
+        function deleteTask(name) {
+            if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) {
+                        showToast("Success", res.message, "success");
+                        loadTasks();
+                    } else {
+                        showToast("Error", res.error, "error");
+                    }
+                }).withFailureHandler(err => {
+                    showToast("Error", err.message, "error");
+                }).deleteTask(name);
+            }
+        }
+
 </script>
