@@ -17,7 +17,7 @@
         <span class="opacity-75"><i class="fas fa-flask mr-1"></i> Apps Script Environment Simulator</span>
         <div class="flex items-center space-x-2">
             <span>Current Role:</span>
-            <select id="role-simulator" class="bg-indigo-800 border border-indigo-700 rounded px-2 py-1 text-white focus:outline-none" onchange="switchRole(this.value)">
+            <select id="role-simulator" class="bg-indigo-800 border border-indigo-700 rounded px-2 py-1 text-white focus:outline-none">
                 <option value="employee">Employee (Field Crew)</option>
                 <option value="admin">Admin (Payroll/Billing)</option>
                 <option value="owner">Owner (Executive)</option>
@@ -46,25 +46,25 @@
         <!-- App Navigation -->
         <nav id="app-nav" class="border-t border-gray-100 bg-gray-50">
             <div class="max-w-4xl mx-auto px-4 flex space-x-6">
-                <button onclick="switchTab('employee-view')" id="tab-employee-view" class="py-3 px-1 border-b-2 border-blue-600 text-blue-600 font-medium text-sm transition-colors">
+                <button id="tab-employee-view" class="py-3 px-1 border-b-2 border-blue-600 text-blue-600 font-medium text-sm transition-colors">
                     <i class="fas fa-clock mr-1"></i> Time Punch
                 </button>
-                <button onclick="switchTab('history-view')" id="tab-history-view" class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-history-view" class="py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-history mr-1"></i> My History
                 </button>
-                <button onclick="switchTab('dashboard-view')" id="tab-dashboard-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-dashboard-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-chart-line mr-1"></i> Dashboard
                 </button>
-                <button onclick="switchTab('payroll-view')" id="tab-payroll-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-payroll-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-money-check-alt mr-1"></i> Payroll
                 </button>
-                <button onclick="switchTab('billing-view')" id="tab-billing-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-billing-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-file-invoice-dollar mr-1"></i> Billing
                 </button>
-                <button onclick="switchTab('lease-view')" id="tab-lease-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-lease-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-home mr-1"></i> Rentals
                 </button>
-                <button onclick="switchTab('settings-view')" id="tab-settings-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
+                <button id="tab-settings-view" class="hidden py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors">
                     <i class="fas fa-cog mr-1"></i> Settings
                 </button>
             </div>
@@ -80,7 +80,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                     <h2 class="text-lg font-semibold mb-4 border-b pb-2">Log Work</h2>
                     
-                    <form id="work-log-form" onsubmit="submitWorkLog(event)" class="space-y-4">
+                    <form id="work-log-form" class="space-y-4">
                         <!-- Date -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Date Completed <span class="text-red-500">*</span></label>
@@ -127,7 +127,7 @@
                         <div class="mt-6 border-t pt-4">
                             <div class="flex justify-between items-center mb-2">
                                 <label class="block text-sm font-medium text-gray-700">Materials & Receipt Uploads</label>
-                                <button type="button" onclick="addMaterialRow()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
+                                <button id="auto-gen-id-1" type="button" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
                                     <i class="fas fa-plus mr-1"></i> Add Item
                                 </button>
                             </div>
@@ -154,7 +154,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="font-semibold text-gray-800"><i class="fas fa-calendar-day mr-2 text-blue-600"></i>Daily Hours Summary</h2>
-                        <button onclick="loadEmployeeHistory()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors">
+                        <button id="auto-gen-id-2" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors">
                             <i class="fas fa-sync-alt mr-1"></i> Refresh
                         </button>
                     </div>
@@ -179,13 +179,13 @@
             <div id="lease-view" class="hidden space-y-6">
                 <!-- Rentals Sub-Navigation -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-3xl mx-auto flex space-x-2">
-                    <button onclick="switchRentalSubTab('rent-tracking-sub')" id="tab-rent-tracking-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+                    <button id="tab-rent-tracking-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
                         Rent Tracking
                     </button>
-                    <button onclick="switchRentalSubTab('lease-management-sub')" id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                    <button id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                         Lease Management
                     </button>
-                    <button onclick="switchRentalSubTab('settlements-sub')" id="tab-settlements-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+                    <button id="tab-settlements-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                         Settlements
                     </button>
                 </div>
@@ -197,11 +197,11 @@
                             <h2 class="text-lg font-semibold"><i class="fas fa-chart-line text-blue-600 mr-2"></i>Rent Tracking Roll</h2>
 
                             <div class="flex gap-2 w-full md:w-auto">
-                                <select id="rt-year-filter" onchange="loadRentTrackingData()" class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <select id="rt-year-filter" class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                                     <!-- Options populated by JS -->
                                 </select>
-                                <input type="text" id="rt-owner-filter" oninput="filterRentTrackingTable()" placeholder="Filter Owner/Company..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
-                                <input type="text" id="rt-address-filter" oninput="filterRentTrackingTable()" placeholder="Filter Address..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
+                                <input type="text" id="rt-owner-filter" placeholder="Filter Owner/Company..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
+                                <input type="text" id="rt-address-filter" placeholder="Filter Address..." class="rounded-lg border-gray-300 border p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 md:w-48">
                             </div>
                         </div>
 
@@ -209,10 +209,10 @@
                             <table class="w-full text-left border-collapse" id="rent-tracking-table">
                                 <thead>
                                     <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-t">
-                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(0)">Property</th>
-                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(1)">Owner/Company</th>
-                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(2)">Address</th>
-                                        <th class="p-3 font-medium cursor-pointer hover:bg-gray-100" onclick="sortRentTracking(3)">Tenant Name</th>
+                                        <th id="auto-gen-id-3" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Property</th>
+                                        <th id="auto-gen-id-4" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Owner/Company</th>
+                                        <th id="auto-gen-id-5" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Address</th>
+                                        <th id="auto-gen-id-6" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Tenant Name</th>
                                         <th class="p-3 font-medium text-right">Expected Rent</th>
                                         <th class="p-3 font-medium text-center">Jan</th>
                                         <th class="p-3 font-medium text-center">Feb</th>
@@ -242,7 +242,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                     <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-file-contract text-blue-600 mr-2"></i>Create New Lease</h2>
 
-                    <form id="create-lease-form" onsubmit="submitNewLease(event)" class="space-y-4">
+                    <form id="create-lease-form" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Property</label>
                             <input type="text" id="lease-property" list="property-list" autocomplete="off" placeholder="Type property name..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
@@ -271,7 +271,7 @@
                         <div class="mt-6 border-t pt-4">
                             <div class="flex justify-between items-center mb-2">
                                 <label class="block text-sm font-medium text-gray-700">Tenants</label>
-                                <button type="button" onclick="addTenantRow()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
+                                <button id="auto-gen-id-7" type="button" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-2 rounded font-medium transition-colors">
                                     <i class="fas fa-plus mr-1"></i> Add Tenant
                                 </button>
                             </div>
@@ -294,7 +294,7 @@
 
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Select Lease to View Balance / Add Entry</label>
-                        <select id="ledger-lease-select" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white" onchange="updateTenantDropdownAndBalance()">
+                        <select id="ledger-lease-select" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-green-500 outline-none bg-white">
                             <option value="">-- Select a Lease --</option>
                         </select>
                     </div>
@@ -313,7 +313,7 @@
                     </div>
 
                     <!-- Ledger Entry Form -->
-                    <form id="ledger-entry-form" onsubmit="submitLedgerEntry(event)" class="space-y-4 border-t pt-4">
+                    <form id="ledger-entry-form" class="space-y-4 border-t pt-4">
                         <h3 class="font-medium text-gray-800 text-sm mb-2">Record Ledger Entry</h3>
 
                         <div class="grid grid-cols-2 gap-4">
@@ -363,7 +363,7 @@
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                         <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-hand-holding-usd text-blue-600 mr-2"></i>Monthly Owner Settlement</h2>
 
-                        <form id="owner-settlement-form" onsubmit="generateOwnerSettlementUI(event)" class="space-y-4">
+                        <form id="owner-settlement-form" class="space-y-4">
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Property</label>
@@ -389,7 +389,7 @@
                         <div id="os-display" class="hidden mt-6 pt-4 border-t border-gray-200">
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="font-bold text-gray-800">Settlement Preview</h3>
-                                <button onclick="exportOS()" id="btn-export-os" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
+                                <button id="btn-export-os" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
                                     <i class="fas fa-file-pdf text-red-500"></i> Export to PDF
                                 </button>
                             </div>
@@ -414,7 +414,7 @@
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                         <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-shield-alt text-purple-600 mr-2"></i>Security Deposit Settlement</h2>
 
-                        <form id="sd-settlement-form" onsubmit="generateSDSettlementUI(event)" class="space-y-4">
+                        <form id="sd-settlement-form" class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Select Lease</label>
                                 <select id="sd-lease-select" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
@@ -432,7 +432,7 @@
                         <div id="sd-display" class="hidden mt-6 pt-4 border-t border-gray-200">
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="font-bold text-gray-800">Settlement Preview</h3>
-                                <button onclick="exportSD()" id="btn-export-sd" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
+                                <button id="btn-export-sd" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1.5 px-3 rounded shadow-sm border flex items-center gap-2">
                                     <i class="fas fa-file-pdf text-red-500"></i> Export to PDF
                                 </button>
                             </div>
@@ -470,7 +470,7 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                                 <input type="date" id="dash-end-date" class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
-                            <button onclick="loadDashboardData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                            <button id="auto-gen-id-8" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
                                 Filter
                             </button>
                         </div>
@@ -539,23 +539,23 @@
                             <span>Date Range & Pay Period Filter (Payroll)</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="setPayPeriodFilter('current')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">This Bi-Weekly</button>
-                            <button onclick="setPayPeriodFilter('previous')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">Last Bi-Weekly</button>
-                            <button onclick="setPayPeriodFilter('all')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">All Time</button>
+                            <button id="auto-gen-id-9" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">This Bi-Weekly</button>
+                            <button id="auto-gen-id-10" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">Last Bi-Weekly</button>
+                            <button id="auto-gen-id-11" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">All Time</button>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
-                            <input type="date" id="payroll-start-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="syncDates('payroll'); loadAdminDashboardData()">
+                            <input type="date" id="payroll-start-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">End Date</label>
-                            <input type="date" id="payroll-end-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="syncDates('payroll'); loadAdminDashboardData()">
+                            <input type="date" id="payroll-end-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">Approval Status</label>
-                            <select id="payroll-status-filter" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none bg-white" onchange="syncStatuses('payroll'); loadAdminDashboardData()">
+                            <select id="payroll-status-filter" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none bg-white">
                                 <option value="All">All Statuses</option>
                                 <option value="Pending">Pending / Submitted</option>
                                 <option value="Approved">Approved</option>
@@ -657,23 +657,23 @@
                             <span>Date Range & Pay Period Filter (Billing)</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="setPayPeriodFilter('current')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">This Bi-Weekly</button>
-                            <button onclick="setPayPeriodFilter('previous')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">Last Bi-Weekly</button>
-                            <button onclick="setPayPeriodFilter('all')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">All Time</button>
+                            <button id="auto-gen-id-12" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">This Bi-Weekly</button>
+                            <button id="auto-gen-id-13" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">Last Bi-Weekly</button>
+                            <button id="auto-gen-id-14" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded font-medium transition-colors">All Time</button>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
-                            <input type="date" id="billing-start-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="syncDates('billing'); loadAdminDashboardData()">
+                            <input type="date" id="billing-start-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">End Date</label>
-                            <input type="date" id="billing-end-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none" onchange="syncDates('billing'); loadAdminDashboardData()">
+                            <input type="date" id="billing-end-date" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">Approval Status</label>
-                            <select id="billing-status-filter" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none bg-white" onchange="syncStatuses('billing'); loadAdminDashboardData()">
+                            <select id="billing-status-filter" class="w-full rounded-lg border-gray-300 border p-2 text-xs focus:ring-blue-500 outline-none bg-white">
                                 <option value="All">All Statuses</option>
                                 <option value="Pending">Pending / Submitted</option>
                                 <option value="Approved">Approved</option>
@@ -715,7 +715,7 @@
                             <h2 class="font-semibold text-gray-800"><i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Work Log Approval Center</h2>
                             <p class="text-xs text-gray-500">Review, approve, or reject logged time entries</p>
                         </div>
-                        <button onclick="loadAdminDashboardData()" class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium shadow-sm transition-colors">
+                        <button id="auto-gen-id-15" class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium shadow-sm transition-colors">
                             <i class="fas fa-sync-alt mr-1"></i> Refresh
                         </button>
                     </div>
@@ -763,11 +763,11 @@
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 transform scale-95 transition-transform duration-300" id="edit-modal-content">
             <div class="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 class="text-lg font-bold text-gray-900"><i class="fas fa-edit text-blue-600 mr-2"></i>Edit Punch Entry</h3>
-                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
+                <button id="auto-gen-id-16" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
-            <form id="edit-punch-form" onsubmit="submitPunchEdit(event)" class="space-y-4">
+            <form id="edit-punch-form" class="space-y-4">
                 <input type="hidden" id="edit-work-log-id" />
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Date Completed</label>
@@ -792,7 +792,7 @@
                     <textarea id="edit-log-notes" rows="2" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
                 </div>
                 <div class="pt-2 flex justify-end gap-3">
-                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-17" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="save-edit-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors">Save Changes</button>
                 </div>
             </form>
@@ -807,7 +807,7 @@
                     <h3 class="text-lg font-bold text-gray-900" id="inv-modal-property">Property Invoice</h3>
                     <p class="text-xs text-gray-500" id="inv-modal-date">Date generated</p>
                 </div>
-                <button onclick="closeInvoiceModal()" class="text-gray-400 hover:text-gray-600 p-2">
+                <button id="auto-gen-id-18" class="text-gray-400 hover:text-gray-600 p-2">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
@@ -872,15 +872,15 @@
                 </div>
             </div>
             <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
-                <button id="export-pdf-btn" onclick="exportInvoicePDF()" class="px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
+                <button id="export-pdf-btn" class="px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
                     <i class="fas fa-file-pdf text-red-500"></i>
                     <span>Export PDF / Doc</span>
                 </button>
                 <div class="flex gap-3">
-                    <button onclick="closeInvoiceModal()" class="px-4 py-2 text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors text-sm">
+                    <button id="auto-gen-id-19" class="px-4 py-2 text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors text-sm">
                         Close
                     </button>
-                    <button id="mark-billed-btn" onclick="executeMarkBilled()" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
+                    <button id="mark-billed-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium shadow-sm transition-colors text-sm flex items-center gap-2">
                         <i class="fas fa-check-circle"></i>
                         <span>Mark as Billed</span>
                     </button>
@@ -900,10 +900,10 @@
                 The property <span id="unlisted-prop-name" class="font-bold"></span> is not in our standard database. Are you sure you want to log hours to this new location?
             </p>
             <div class="flex justify-end gap-3">
-                <button type="button" onclick="closeWarningModal(false)" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
+                <button id="auto-gen-id-20" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
                     No, fix it
                 </button>
-                <button type="button" onclick="closeWarningModal(true)" class="px-4 py-2 text-white bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-medium shadow-sm transition-colors">
+                <button id="auto-gen-id-21" type="button" class="px-4 py-2 text-white bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-medium shadow-sm transition-colors">
                     Yes, submit anyway
                 </button>
             </div>
@@ -914,16 +914,16 @@
     <div id="settings-view" class="hidden space-y-6">
         <!-- Settings Sub-Navigation -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-4xl mx-auto flex space-x-2">
-            <button onclick="switchSettingsSubTab('billing-rates-sub')" id="tab-billing-rates-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+            <button id="tab-billing-rates-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
                 Billing Rates
             </button>
-            <button onclick="switchSettingsSubTab('properties-sub')" id="tab-properties-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+            <button id="tab-properties-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                 Properties
             </button>
-            <button onclick="switchSettingsSubTab('employees-sub')" id="tab-employees-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+            <button id="tab-employees-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                 Employees
             </button>
-            <button onclick="switchSettingsSubTab('tasks-sub')" id="tab-tasks-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
+            <button id="tab-tasks-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                 Task Categories
             </button>
         </div>
@@ -934,10 +934,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-money-bill-wave text-blue-600 mr-2"></i>Billing Rates Configuration</h2>
                     <div class="flex gap-2">
-                        <button onclick="openRateModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <button id="auto-gen-id-22" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
                             <i class="fas fa-plus mr-1"></i> Add Rate
                         </button>
-                        <button onclick="openBulkAddModal('rates')" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
+                        <button id="auto-gen-id-23" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
                             <i class="fas fa-layer-group mr-1"></i> Bulk Add
                         </button>
                     </div>
@@ -968,10 +968,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-home text-blue-600 mr-2"></i>Properties</h2>
                     <div class="flex gap-2">
-                        <button onclick="openPropertyModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <button id="auto-gen-id-24" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
                             <i class="fas fa-plus mr-1"></i> Add Property
                         </button>
-                        <button onclick="openBulkAddModal('properties')" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
+                        <button id="auto-gen-id-25" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
                             <i class="fas fa-layer-group mr-1"></i> Bulk Add
                         </button>
                     </div>
@@ -1002,10 +1002,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-users text-blue-600 mr-2"></i>Employees</h2>
                     <div class="flex gap-2">
-                        <button onclick="openEmployeeModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <button id="auto-gen-id-26" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
                             <i class="fas fa-plus mr-1"></i> Add Employee
                         </button>
-                        <button onclick="openBulkAddModal('employees')" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
+                        <button id="auto-gen-id-27" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
                             <i class="fas fa-layer-group mr-1"></i> Bulk Add
                         </button>
                     </div>
@@ -1039,10 +1039,10 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-tasks text-blue-600 mr-2"></i>Task Categories</h2>
                     <div class="flex gap-2">
-                        <button onclick="openTaskModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                        <button id="auto-gen-id-28" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm">
                             <i class="fas fa-plus mr-1"></i> Add Task
                         </button>
-                        <button onclick="openBulkAddModal('tasks')" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
+                        <button id="auto-gen-id-29" class="hidden md:flex bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm items-center">
                             <i class="fas fa-layer-group mr-1"></i> Bulk Add
                         </button>
                     </div>
@@ -1071,9 +1071,9 @@
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-lg font-bold text-gray-800" id="rate-modal-title">Add Billing Rate</h3>
-                <button onclick="closeRateModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                <button id="auto-gen-id-30" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="rate-form" onsubmit="submitRate(event)" class="p-5 overflow-y-auto space-y-4">
+            <form id="rate-form" class="p-5 overflow-y-auto space-y-4">
                 <input type="hidden" id="rate-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
@@ -1090,7 +1090,7 @@
                     <input type="number" step="0.01" min="0" id="rate-amount" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                 </div>
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeRateModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-31" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-rate-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Rate</span>
                     </button>
@@ -1104,9 +1104,9 @@
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-lg font-bold text-gray-800" id="property-modal-title">Add Property</h3>
-                <button onclick="closePropertyModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                <button id="auto-gen-id-32" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="property-form" onsubmit="submitProperty(event)" class="p-5 overflow-y-auto space-y-4">
+            <form id="property-form" class="p-5 overflow-y-auto space-y-4">
                 <input type="hidden" id="old-property-name">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Property Name (ID)</label>
@@ -1121,7 +1121,7 @@
                     <input type="text" id="prop-address" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                 </div>
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closePropertyModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-33" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-property-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Property</span>
                     </button>
@@ -1135,9 +1135,9 @@
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-lg font-bold text-gray-800" id="employee-modal-title">Add Employee</h3>
-                <button onclick="closeEmployeeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                <button id="auto-gen-id-34" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="employee-form" onsubmit="submitEmployee(event)" class="p-5 overflow-y-auto space-y-4">
+            <form id="employee-form" class="p-5 overflow-y-auto space-y-4">
                 <input type="hidden" id="emp-is-edit" value="false">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
@@ -1179,7 +1179,7 @@
                     </select>
                 </div>
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeEmployeeModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-35" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-employee-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Employee</span>
                     </button>
@@ -1194,9 +1194,9 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-lg font-bold text-gray-800" id="bulk-modal-title">Bulk Add</h3>
-                <button onclick="closeBulkAddModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                <button id="auto-gen-id-36" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="bulk-add-form" onsubmit="submitBulkAdd(event)" class="p-5 overflow-y-auto space-y-4 flex-grow">
+            <form id="bulk-add-form" class="p-5 overflow-y-auto space-y-4 flex-grow">
                 <input type="hidden" id="bulk-entity-type" value="">
 
                 <div class="overflow-x-auto rounded-lg border border-gray-200">
@@ -1211,13 +1211,13 @@
                 </div>
 
                 <div class="mt-4">
-                    <button type="button" onclick="addBulkRow()" class="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center">
+                    <button id="auto-gen-id-37" type="button" class="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center">
                         <i class="fas fa-plus mr-1"></i> Add Row
                     </button>
                 </div>
 
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeBulkAddModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-38" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-bulk-btn" class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save All</span>
                     </button>
@@ -1231,16 +1231,16 @@
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <h3 class="text-lg font-bold text-gray-800" id="task-modal-title">Add Task Category</h3>
-                <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                <button id="auto-gen-id-39" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="task-form" onsubmit="submitTask(event)" class="p-5 overflow-y-auto space-y-4">
+            <form id="task-form" class="p-5 overflow-y-auto space-y-4">
                 <input type="hidden" id="old-task-name">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Task Category Name</label>
                     <input type="text" id="task-name" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                 </div>
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-40" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-task-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Task</span>
                     </button>
@@ -1254,12 +1254,12 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <h3 class="font-semibold text-gray-800"><i class="fas fa-money-check-alt text-blue-500 mr-2"></i>Record Payroll Payment</h3>
-                <button type="button" onclick="closePayrollPaymentModal()" class="text-gray-400 hover:text-red-500 transition-colors">
+                <button id="auto-gen-id-41" type="button" class="text-gray-400 hover:text-red-500 transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <form id="payroll-payment-form" onsubmit="submitPayrollPayment(event)" class="p-5 space-y-4 overflow-y-auto">
+            <form id="payroll-payment-form" class="p-5 space-y-4 overflow-y-auto">
                 <input type="hidden" id="pp-employee-id">
                 <input type="hidden" id="pp-employee-name">
                 <input type="hidden" id="pp-amount">
@@ -1290,7 +1290,7 @@
                 </div>
 
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closePayrollPaymentModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-42" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-pp-payment-btn" class="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Mark Paid</span>
                     </button>
@@ -1304,12 +1304,12 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <h3 class="font-semibold text-gray-800"><i class="fas fa-money-bill-wave text-green-500 mr-2"></i>Record Rent Payment</h3>
-                <button type="button" onclick="closeRentPaymentModal()" class="text-gray-400 hover:text-red-500 transition-colors">
+                <button id="auto-gen-id-43" type="button" class="text-gray-400 hover:text-red-500 transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <form id="rent-payment-form" onsubmit="submitRentTrackingPayment(event)" class="p-5 space-y-4 overflow-y-auto">
+            <form id="rent-payment-form" class="p-5 space-y-4 overflow-y-auto">
                 <input type="hidden" id="rt-lease-id">
                 <input type="hidden" id="rt-tenant-id">
                 <input type="hidden" id="rt-month">
@@ -1350,7 +1350,7 @@
                 </div>
 
                 <div class="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-4">
-                    <button type="button" onclick="closeRentPaymentModal()" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                    <button id="auto-gen-id-44" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                     <button type="submit" id="submit-rt-payment-btn" class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
                         <span>Save Payment</span>
                     </button>
