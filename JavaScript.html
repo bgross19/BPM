@@ -10,146 +10,271 @@
         document.getElementById('log-date').valueAsDate = new Date();
 
         // Environment Runner
-        const mockGoogleScriptRun = {
-            withSuccessHandler: function(callback) {
-                return {
-                    getDropdownData: function() {
-                        setTimeout(() => {
-                            callback({
-                                properties: ["Alpha Phi", "4638 B", "645 Ber", "Company Office"],
-                                tasks: ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"]
-                            });
-                        }, 300);
-                    },
-                    submitWorkLog: function(payload) {
-                        setTimeout(() => callback({ success: true }), 500);
-                    },
-                    getUserRole: function() {
-                        setTimeout(() => callback({ role: 'admin', employeeId: 'EMP-001', name: 'Brian Gross' }), 300);
-                    },
-                    getEmployeeWorkLogs: function() {
-                        setTimeout(() => callback({
+        const mockGoogleScriptRun = (function() {
+        function createRunner(successCb, failureCb) {
+            const runner = {
+                withSuccessHandler: function(cb) { return createRunner(cb, failureCb); },
+                withFailureHandler: function(cb) { return createRunner(successCb, cb); },
+
+                getDropdownData: function() {
+                    setTimeout(() => successCb && successCb({
+                        properties: ["Alpha Phi", "4638 B", "645 Ber", "Company Office"],
+                        tasks: ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"]
+                    }), 300);
+                },
+                submitWorkLog: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true }), 500);
+                },
+                getUserRole: function() {
+                    setTimeout(() => successCb && successCb({ role: 'admin', employeeId: 'EMP-001', name: 'Brian Gross' }), 300);
+                },
+                getEmployeeWorkLogs: function() {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        employeeName: 'Brian Gross',
+                        dailySummary: [
+                            { date: '2026-09-12', totalHours: 6.5 },
+                            { date: '2026-09-11', totalHours: 8.0 }
+                        ],
+                        punches: [
+                            { workLogId: '1', dateCompleted: '2026-09-12', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', billingStatus: 'Unbilled' },
+                            { workLogId: '2', dateCompleted: '2026-09-12', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Fixed sink pipe leak', payrollStatus: 'Approved', billingStatus: 'Unbilled' },
+                            { workLogId: '3', dateCompleted: '2026-09-11', propertyId: 'Company Office', taskId: 'Handyman', hoursWorked: 8.0, workNotes: 'Repaired door hinges', payrollStatus: 'Paid', billingStatus: 'Billed' }
+                        ]
+                    }), 300);
+                },
+                updateWorkLog: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Punch updated successfully' }), 400);
+                },
+                updateApprovalStatus: function(workLogId, status) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Status updated to ' + status }), 300);
+                },
+                updateChargeAmount: function(workLogId, val) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Charge amount updated' }), 300);
+                },
+                getAdminPayrollData: function(startDate, endDate, statusFilter) {
+                    setTimeout(() => {
+                        successCb && successCb({
                             success: true,
-                            employeeName: 'Brian Gross',
-                            dailySummary: [
-                                { date: '2026-09-12', totalHours: 6.5 },
-                                { date: '2026-09-11', totalHours: 8.0 }
+                            metrics: {
+                                pendingPayrollHours: 15.0,
+                                pendingPayrollGrossPay: 525.00,
+                                approvedPayrollHours: 27.5,
+                                approvedPayrollGrossPay: 687.50,
+                                unbilledMaterialsCost: 1240.50,
+                                unbilledLaborCost: 1212.50,
+                                totalUnbilledInvoiceAmount: 2453.00,
+                                totalLogs: 14
+                            },
+                            workLogs: [
+                                { workLogId: '1', dateCompleted: '2026-09-12', employeeName: 'Brian Gross', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', grossPay: 70.00 },
+                                { workLogId: '2', dateCompleted: '2026-09-12', employeeName: 'Jason R.', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Pipe leak repair', payrollStatus: 'Approved', grossPay: 112.50 }
                             ],
-                            punches: [
-                                { workLogId: '1', dateCompleted: '2026-09-12', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', billingStatus: 'Unbilled' },
-                                { workLogId: '2', dateCompleted: '2026-09-12', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Fixed sink pipe leak', payrollStatus: 'Approved', billingStatus: 'Unbilled' },
-                                { workLogId: '3', dateCompleted: '2026-09-11', propertyId: 'Company Office', taskId: 'Handyman', hoursWorked: 8.0, workNotes: 'Repaired door hinges', payrollStatus: 'Paid', billingStatus: 'Billed' }
+                            employeeSummaries: [
+                                { employeeId: 'EMP-001', name: 'Brian Gross', payRate: 35.00, approvedHours: 15.0, approvedGrossPay: 525.00 },
+                                { employeeId: 'EMP-002', name: 'Jason R.', payRate: 25.00, approvedHours: 27.5, approvedGrossPay: 687.50 }
+                            ],
+                            propertySummaries: [
+                                { propertyId: 'Alpha Phi', unbilledHours: 18.0, unbilledLaborCost: 550.00, unbilledMaterialsCost: 420.00, totalUnbilled: 970.00 },
+                                { propertyId: '4638 B', unbilledHours: 12.5, unbilledLaborCost: 387.50, unbilledMaterialsCost: 820.50, totalUnbilled: 1208.00 }
                             ]
-                        }), 300);
-                    },
-                    updateWorkLog: function(payload) {
-                        setTimeout(() => callback({ success: true, message: 'Punch updated successfully' }), 400);
-                    },
-                    updateApprovalStatus: function(workLogId, status) {
-                        setTimeout(() => callback({ success: true, message: 'Status updated to ' + status }), 300);
-                    },
-                    getAdminPayrollData: function(startDate, endDate, statusFilter) {
-                        setTimeout(() => {
-                            callback({
-                                success: true,
-                                metrics: {
-                                    pendingPayrollHours: 15.0,
-                                    pendingPayrollGrossPay: 525.00,
-                                    approvedPayrollHours: 27.5,
-                                    approvedPayrollGrossPay: 687.50,
-                                    unbilledMaterialsCost: 1240.50,
-                                    unbilledLaborCost: 1212.50,
-                                    totalUnbilledInvoiceAmount: 2453.00,
-                                    totalLogs: 14
-                                },
-                                workLogs: [
-                                    { workLogId: '1', dateCompleted: '2026-09-12', employeeName: 'Brian Gross', propertyId: 'Alpha Phi', taskId: 'Lawn/Landscaping', hoursWorked: 2.0, workNotes: 'Mowed lawn', payrollStatus: 'Pending', grossPay: 70.00 },
-                                    { workLogId: '2', dateCompleted: '2026-09-12', employeeName: 'Jason R.', propertyId: '4638 B', taskId: 'Plumbing', hoursWorked: 4.5, workNotes: 'Pipe leak repair', payrollStatus: 'Approved', grossPay: 112.50 }
-                                ],
-                                employeeSummaries: [
-                                    { employeeId: 'EMP-001', name: 'Brian Gross', payRate: 35.00, approvedHours: 15.0, approvedGrossPay: 525.00 },
-                                    { employeeId: 'EMP-002', name: 'Jason R.', payRate: 25.00, approvedHours: 27.5, approvedGrossPay: 687.50 }
-                                ],
-                                propertySummaries: [
-                                    { propertyId: 'Alpha Phi', unbilledHours: 18.0, unbilledLaborCost: 550.00, unbilledMaterialsCost: 420.00, totalUnbilled: 970.00 },
-                                    { propertyId: '4638 B', unbilledHours: 12.5, unbilledLaborCost: 387.50, unbilledMaterialsCost: 820.50, totalUnbilled: 1208.00 }
-                                ]
-                            });
-                        }, 400);
-                    },
-                    markPayrollPaid: function(payload) {
-                        setTimeout(() => callback({ success: true, message: 'Payroll updated' }), 400);
-                    },
-                    getPayrollHistory: function() {
-                        setTimeout(() => {
-                            callback({
-                                success: true,
-                                history: [
-                                    { timestamp: '2026-09-01T12:00:00Z', employeeName: 'Brian Gross', employeeId: 'EMP-001', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1500.00, paymentMethod: 'Direct Deposit' },
-                                    { timestamp: '2026-09-02T12:00:00Z', employeeName: 'Jason R.', employeeId: 'EMP-002', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1200.00, paymentMethod: 'Check' }
-                                ]
-                            });
-                        }, 300);
-                    },
-                    generateInvoiceReport: function(propId) {
-                        setTimeout(() => {
-                            callback({
-                                success: true,
-                                invoice: {
-                                    propertyId: propId,
-                                    invoiceDate: new Date().toLocaleDateString(),
-                                    laborItems: [
-                                        { dateCompleted: '2026-09-10', employeeName: 'Jason R.', taskId: 'Plumbing', hoursWorked: 4, grossPay: 100, workNotes: 'Replaced sink valves' },
-                                        { dateCompleted: '2026-09-11', employeeName: 'Brian Gross', taskId: 'Electrical', hoursWorked: 3, grossPay: 105, workNotes: 'Installed breaker box' }
-                                    ],
-                                    materialItems: [
-                                        { vendor: 'Home Depot', description: 'PVC Pipe fittings', cost: 85.50, receiptUrl: '#' },
-                                        { vendor: 'Lowe\'s', description: 'Circuit panel switch', cost: 150.00, receiptUrl: '#' }
-                                    ],
-                                    totalHours: 7,
-                                    totalLaborCost: 205.00,
-                                    totalMaterialsCost: 235.50,
-                                    grandTotal: 440.50
-                                }
-                            });
-                        }, 400);
-                    },
-                    exportInvoicePDF: function(propId) {
-                        setTimeout(() => {
-                            callback({
-                                success: true,
-                                docUrl: '#',
-                                pdfUrl: '#',
-                                fileName: 'Invoice - ' + propId + '.pdf',
-                                base64Pdf: ''
-                            });
-                        }, 800);
-                    },
-                    markPropertyBilled: function(propId) {
-                        setTimeout(() => callback({ success: true, message: 'Property billed' }), 400);
-                    },
-                    generateOwnerSettlement: function(prop, monthYear, fee) {
-                        setTimeout(() => callback({
+                        });
+                    }, 400);
+                },
+                markPayrollPaid: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Payroll updated' }), 400);
+                },
+                getPayrollHistory: function() {
+                    setTimeout(() => {
+                        successCb && successCb({
                             success: true,
-                            settlement: { propertyId: prop, monthYear: monthYear, totalRentCollected: 2500, managementFeePercent: fee, managementFeeAmount: 2500 * (fee/100), totalMaintenanceBilled: 150, netPayout: 2500 - (2500 * (fee/100)) - 150 }
-                        }), 400);
-                    },
-                    exportOwnerSettlementPDF: function(prop, monthYear, fee) {
-                        setTimeout(() => callback({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'OS.pdf' }), 800);
-                    },
-                    generateSecurityDepositSettlement: function(leaseId) {
-                        setTimeout(() => callback({
+                            history: [
+                                { timestamp: '2026-09-01T12:00:00Z', employeeName: 'Brian Gross', employeeId: 'EMP-001', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1500.00, paymentMethod: 'Direct Deposit' },
+                                { timestamp: '2026-09-02T12:00:00Z', employeeName: 'Jason R.', employeeId: 'EMP-002', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1200.00, paymentMethod: 'Check' }
+                            ]
+                        });
+                    }, 300);
+                },
+                generateInvoiceReport: function(propId) {
+                    setTimeout(() => {
+                        successCb && successCb({
                             success: true,
-                            settlement: { leaseId: leaseId, securityDeposit: 1500, unpaidRent: 200, totalDamages: 100, netRefund: 1200 }
-                        }), 400);
-                    },
-                    exportSecurityDepositSettlementPDF: function(leaseId) {
-                        setTimeout(() => callback({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'SD.pdf' }), 800);
-                    }
-                };
-            }
+                            invoice: {
+                                propertyId: propId,
+                                invoiceDate: new Date().toLocaleDateString(),
+                                laborItems: [
+                                    { dateCompleted: '2026-09-10', employeeName: 'Jason R.', taskId: 'Plumbing', hoursWorked: 4, grossPay: 100, workNotes: 'Replaced sink valves' },
+                                    { dateCompleted: '2026-09-11', employeeName: 'Brian Gross', taskId: 'Electrical', hoursWorked: 3, grossPay: 105, workNotes: 'Installed breaker box' }
+                                ],
+                                materialItems: [
+                                    { vendor: 'Home Depot', description: 'PVC Pipe fittings', cost: 85.50, receiptUrl: '#' },
+                                    { vendor: 'Lowe\'s', description: 'Circuit panel switch', cost: 150.00, receiptUrl: '#' }
+                                ],
+                                totalHours: 7,
+                                totalLaborCost: 205.00,
+                                totalMaterialsCost: 235.50,
+                                grandTotal: 440.50
+                            }
+                        });
+                    }, 400);
+                },
+                exportInvoicePDF: function(propId) {
+                    setTimeout(() => {
+                        successCb && successCb({
+                            success: true,
+                            docUrl: '#',
+                            pdfUrl: '#',
+                            fileName: 'Invoice - ' + propId + '.pdf',
+                            base64Pdf: ''
+                        });
+                    }, 800);
+                },
+                markPropertyBilled: function(propId) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Property billed' }), 400);
+                },
+                generateOwnerSettlement: function(prop, monthYear, fee) {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        settlement: { propertyId: prop, monthYear: monthYear, totalRentCollected: 2500, managementFeePercent: fee, managementFeeAmount: 2500 * (fee/100), totalMaintenanceBilled: 150, netPayout: 2500 - (2500 * (fee/100)) - 150 }
+                    }), 400);
+                },
+                exportOwnerSettlementPDF: function(prop, monthYear, fee) {
+                    setTimeout(() => successCb && successCb({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'OS.pdf' }), 800);
+                },
+                generateSecurityDepositSettlement: function(leaseId) {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        settlement: { leaseId: leaseId, securityDeposit: 1500, unpaidRent: 200, totalDamages: 100, netRefund: 1200 }
+                    }), 400);
+                },
+                exportSecurityDepositSettlementPDF: function(leaseId) {
+                    setTimeout(() => successCb && successCb({ success: true, docUrl: '#', pdfUrl: '#', fileName: 'SD.pdf' }), 800);
+                },
+
+                // --- NEW MOCK METHODS ---
+                getExecutiveDashboardData: function(startDate, endDate) {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        data: {
+                            rent: { billed: 15000, collected: 14500 },
+                            maintenance: { billed: 2500 },
+                            financials: { cashIn: 14500, cashOut: 2500, netProfit: 12000 },
+                            accountsReceivable: [
+                                { type: 'Rent', propertyId: 'Alpha Phi', amount: 500, daysOverdue: 15 },
+                                { type: 'Maintenance', propertyId: '4638 B', amount: 350, daysOverdue: 40 }
+                            ]
+                        }
+                    }), 400);
+                },
+                markPropertyPaid: function(propertyId) {
+                    setTimeout(() => successCb && successCb({ success: true, message: propertyId + ' marked as paid.' }), 400);
+                },
+                addLease: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Lease added' }), 400);
+                },
+                getLeasesAndTenants: function() {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        leases: [{ leaseId: 'L-101', propertyId: 'Alpha Phi' }, { leaseId: 'L-102', propertyId: '4638 B' }],
+                        tenants: [{ tenantId: 'T-01', leaseId: 'L-101', name: 'John Doe' }, { tenantId: 'T-02', leaseId: 'L-102', name: 'Jane Smith' }]
+                    }), 400);
+                },
+                calculateLeaseBalance: function(leaseId) {
+                    setTimeout(() => successCb && successCb({ success: true, balance: 500, expectedRent: 1500, totalCharges: 1500, totalPayments: 1000 }), 400);
+                },
+                recordLedgerEntry: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Ledger entry recorded' }), 400);
+                },
+                getRentRollData: function(year) {
+                    setTimeout(() => successCb && successCb({
+                        success: true,
+                        data: [
+                            { leaseId: 'L-101', tenantId: 'T-01', property: 'Alpha Phi', owner: 'Owner A', address: '123 Alpha St', tenantName: 'John Doe', expectedRent: 1000, activeMonths: Array(12).fill(true), payments: [1000, 1000, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+                            { leaseId: 'L-102', tenantId: 'T-02', property: '4638 B', owner: 'Owner B', address: '4638 Beta Ave', tenantName: 'Jane Smith', expectedRent: 1200, activeMonths: Array(12).fill(true), payments: [1200, 1200, 500, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+                        ]
+                    }), 400);
+                },
+                getProperties: function() {
+                    setTimeout(() => successCb && successCb([
+                        { propertyName: 'Alpha Phi', ownerCompany: 'Owner A', address: '123 Alpha St' },
+                        { propertyName: '4638 B', ownerCompany: 'Owner B', address: '4638 Beta Ave' }
+                    ]), 400);
+                },
+                addProperty: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Property added' }), 400);
+                },
+                updateProperty: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Property updated' }), 400);
+                },
+                deleteProperty: function(name) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Property deleted' }), 400);
+                },
+                getEmployees: function() {
+                    setTimeout(() => successCb && successCb([
+                        { employeeId: 'EMP-001', fullName: 'Brian Gross', email: 'brian@example.com', hourlyPayRate: 35.0, role: 'Admin', phoneNumber: '555-1234', status: 'Active' },
+                        { employeeId: 'EMP-002', fullName: 'Jason R.', email: 'jason@example.com', hourlyPayRate: 25.0, role: 'Field Crew', phoneNumber: '555-5678', status: 'Active' }
+                    ]), 400);
+                },
+                addEmployee: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Employee added' }), 400);
+                },
+                updateEmployee: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Employee updated' }), 400);
+                },
+                deleteEmployee: function(id) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Employee deleted' }), 400);
+                },
+                getTasks: function() {
+                    setTimeout(() => successCb && successCb([
+                        { taskName: 'Handyman' }, { taskName: 'Plumbing' }, { taskName: 'Painting' }
+                    ]), 400);
+                },
+                addTask: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Task added' }), 400);
+                },
+                updateTask: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Task updated' }), 400);
+                },
+                deleteTask: function(name) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Task deleted' }), 400);
+                },
+                getBillingRates: function() {
+                    setTimeout(() => successCb && successCb([
+                        { rateId: 'R1', taskName: 'Plumbing', taskId: 'Plumbing', employeeName: 'Jason R.', employeeId: 'EMP-002', rate: 45.0 },
+                        { rateId: 'R2', taskName: 'Handyman', taskId: 'Handyman', employeeName: 'DEFAULT', employeeId: 'DEFAULT', rate: 35.0 }
+                    ]), 400);
+                },
+                addBillingRate: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Rate added' }), 400);
+                },
+                updateBillingRate: function(payload) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Rate updated' }), 400);
+                },
+                deleteBillingRate: function(id) {
+                    setTimeout(() => successCb && successCb({ success: true, message: 'Rate deleted' }), 400);
+                }
+            };
+            return runner;
+        }
+
+        const baseRunner = createRunner(null, null);
+
+        // Add support for scriptRunner.run(functionName, payloads).then(...)
+        baseRunner.run = function(funcName, ...args) {
+            return new Promise((resolve, reject) => {
+                const tempRunner = createRunner(resolve, reject);
+                if (tempRunner[funcName]) {
+                    tempRunner[funcName](...args);
+                } else {
+                    // Default response if not mocked explicitly
+                    setTimeout(() => resolve({ success: true, message: "Mock " + funcName + " executed" }), 400);
+                }
+            });
         };
-        const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
+
+        return baseRunner;
+    })();
+    const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
         window.onload = function() {
             initRentTracking();

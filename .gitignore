@@ -1,0 +1,6 @@
+node_modules/
+index_local.html
+build_local.py
+fix_mock.py
+package-lock.json
+package.json
