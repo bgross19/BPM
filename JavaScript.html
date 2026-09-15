@@ -2106,4 +2106,197 @@
             }
         }
 
-</script>
+
+        // ==========================================
+        // BULK ADD LOGIC
+        // ==========================================
+
+        const BULK_CONFIG = {
+            rates: {
+                title: "Bulk Add Billing Rates",
+                columns: [
+                    { key: "taskId", label: "Task ID (or Name)*", type: "text", required: true },
+                    { key: "employeeId", label: "Employee ID (or Name)*", type: "text", required: true },
+                    { key: "rate", label: "Hourly Bill Rate ($)*", type: "number", required: true, step: "0.01", min: "0" }
+                ]
+            },
+            properties: {
+                title: "Bulk Add Properties",
+                columns: [
+                    { key: "propertyName", label: "Property Name*", type: "text", required: true },
+                    { key: "ownerCompany", label: "Owner/Company", type: "text", required: false },
+                    { key: "address", label: "Address", type: "text", required: false }
+                ]
+            },
+            employees: {
+                title: "Bulk Add Employees",
+                columns: [
+                    { key: "employeeId", label: "Employee ID (leave blank for auto)", type: "text", required: false },
+                    { key: "fullName", label: "Full Name*", type: "text", required: true },
+                    { key: "email", label: "Email*", type: "email", required: true },
+                    { key: "phoneNumber", label: "Phone Number", type: "text", required: false },
+                    { key: "hourlyPayRate", label: "Hourly Pay Rate ($)*", type: "number", required: true, step: "0.01", min: "0" },
+                    { key: "role", label: "Role", type: "select", options: ["Field Crew", "Admin", "Owner"], default: "Field Crew" },
+                    { key: "status", label: "Status", type: "select", options: ["Active", "Inactive"], default: "Active" }
+                ]
+            },
+            tasks: {
+                title: "Bulk Add Task Categories",
+                columns: [
+                    { key: "taskName", label: "Task Name*", type: "text", required: true },
+                    { key: "description", label: "Description", type: "text", required: false },
+                    { key: "isBillable", label: "Is Billable?", type: "select", options: ["Yes", "No"], default: "Yes" }
+                ]
+            }
+        };
+
+        function openBulkAddModal(entityType) {
+            document.getElementById('bulk-entity-type').value = entityType;
+            const config = BULK_CONFIG[entityType];
+            document.getElementById('bulk-modal-title').innerText = config.title;
+
+            // Render Header
+            let theadHtml = '<tr>';
+            config.columns.forEach(col => {
+                theadHtml += `<th class="py-3 px-4 font-semibold">${col.label}</th>`;
+            });
+            theadHtml += '<th class="py-3 px-2"></th></tr>'; // for delete row button
+            document.getElementById('bulk-table-head').innerHTML = theadHtml;
+
+            // Clear Body and add 5 default rows
+            document.getElementById('bulk-table-body').innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                addBulkRow(entityType);
+            }
+
+            const modal = document.getElementById('bulk-add-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0', 'scale-95'), 10);
+        }
+
+        function closeBulkAddModal() {
+            const modal = document.getElementById('bulk-add-modal');
+            modal.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        function addBulkRow(overrideEntityType = null) {
+            const entityType = overrideEntityType || document.getElementById('bulk-entity-type').value;
+            const config = BULK_CONFIG[entityType];
+            const tbody = document.getElementById('bulk-table-body');
+            const row = document.createElement('tr');
+            row.className = 'bulk-row hover:bg-gray-50';
+
+            let rowHtml = '';
+            config.columns.forEach(col => {
+                rowHtml += `<td class="p-2 align-top">`;
+                if (col.type === 'select') {
+                    rowHtml += `<select data-key="${col.key}" class="w-full rounded border-gray-300 border p-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">`;
+                    col.options.forEach(opt => {
+                        rowHtml += `<option value="${opt}" ${opt === col.default ? 'selected' : ''}>${opt}</option>`;
+                    });
+                    rowHtml += `</select>`;
+                } else {
+                    const stepMin = col.type === 'number' ? `step="${col.step}" min="${col.min}"` : '';
+                    rowHtml += `<input type="${col.type}" data-key="${col.key}" data-required="${col.required}" ${stepMin} class="w-full rounded border-gray-300 border p-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white placeholder-gray-400">`;
+                }
+                rowHtml += `</td>`;
+            });
+            // delete row button
+            rowHtml += `<td class="p-2 align-top text-center"><button type="button" onclick="this.closest('tr').remove()" class="text-red-500 hover:text-red-700 mt-1"><i class="fas fa-trash"></i></button></td>`;
+            row.innerHTML = rowHtml;
+            tbody.appendChild(row);
+        }
+
+        function submitBulkAdd(e) {
+            e.preventDefault();
+            const entityType = document.getElementById('bulk-entity-type').value;
+            const config = BULK_CONFIG[entityType];
+            const rows = document.querySelectorAll('#bulk-table-body .bulk-row');
+            const payloads = [];
+            let hasError = false;
+
+            // Clear previous errors
+            document.querySelectorAll('.bulk-row input, .bulk-row select').forEach(el => el.classList.remove('border-red-500', 'bg-red-50'));
+
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input, select');
+                const rowData = {};
+                let isRowEmpty = true;
+                let isRowMissingRequired = false;
+
+                // Pass 1: check if row is empty and collect data
+                inputs.forEach(input => {
+                    const key = input.getAttribute('data-key');
+                    const val = input.value.trim();
+                    if (input.tagName === 'INPUT' && val !== '') {
+                        isRowEmpty = false;
+                    }
+                    rowData[key] = val;
+                });
+
+                // Pass 2: validate required fields only if row is not empty
+                if (!isRowEmpty) {
+                    inputs.forEach(input => {
+                        const isRequired = input.getAttribute('data-required') === 'true';
+                        const val = input.value.trim();
+                        if (isRequired && val === '') {
+                            isRowMissingRequired = true;
+                            input.classList.add('border-red-500', 'bg-red-50');
+                        }
+                    });
+
+                    if (isRowMissingRequired) {
+                        hasError = true;
+                    } else {
+                        // For tasks, convert string to boolean for isBillable
+                        if (entityType === 'tasks' && 'isBillable' in rowData) {
+                             rowData.isBillable = rowData.isBillable === 'Yes';
+                        }
+                        payloads.push(rowData);
+                    }
+                }
+            });
+
+            if (hasError) {
+                showToast("Please fill in all required fields for non-empty rows.", "error");
+                return;
+            }
+
+            if (payloads.length === 0) {
+                showToast("No data to save.", "warning");
+                return;
+            }
+
+            const btn = document.getElementById('submit-bulk-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            let functionName = '';
+            if (entityType === 'rates') functionName = 'addBillingRatesBulk';
+            if (entityType === 'properties') functionName = 'addPropertiesBulk';
+            if (entityType === 'employees') functionName = 'addEmployeesBulk';
+            if (entityType === 'tasks') functionName = 'addTasksBulk';
+
+            scriptRunner.run(functionName, payloads).then(res => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if (res.success) {
+                    showToast(res.message, 'success');
+                    closeBulkAddModal();
+                    if (entityType === 'rates') loadSettings();
+                    if (entityType === 'properties') loadSettings();
+                    if (entityType === 'employees') loadSettings();
+                    if (entityType === 'tasks') loadSettings();
+                } else {
+                    showToast("Error: " + res.error, 'error');
+                }
+            }).catch(err => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showToast("Connection error.", "error");
+            });
+        }
+
+    </script>
