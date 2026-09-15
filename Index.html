@@ -176,19 +176,19 @@
             <div id="lease-view" class="hidden space-y-6">
                 <!-- Rentals Sub-Navigation -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-2 max-w-3xl mx-auto flex space-x-2">
-                    <button onclick="switchRentalSubTab('lease-management-sub')" id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+                    <button onclick="switchRentalSubTab('rent-tracking-sub')" id="tab-rent-tracking-sub" class="flex-1 py-2 px-4 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm transition-colors text-center">
+                        Rent Tracking
+                    </button>
+                    <button onclick="switchRentalSubTab('lease-management-sub')" id="tab-lease-management-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                         Lease Management
                     </button>
                     <button onclick="switchRentalSubTab('settlements-sub')" id="tab-settlements-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
                         Settlements
                     </button>
-                    <button onclick="switchRentalSubTab('rent-tracking-sub')" id="tab-rent-tracking-sub" class="flex-1 py-2 px-4 rounded-lg text-gray-600 hover:bg-gray-50 font-medium text-sm transition-colors text-center">
-                        Rent Tracking
-                    </button>
                 </div>
 
                 <!-- SUB-VIEW: RENT TRACKING -->
-                <div id="rent-tracking-sub" class="hidden space-y-6">
+                <div id="rent-tracking-sub" class="space-y-6">
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-full mx-auto">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                             <h2 class="text-lg font-semibold"><i class="fas fa-chart-line text-blue-600 mr-2"></i>Rent Tracking Roll</h2>
@@ -234,7 +234,7 @@
                 </div>
 
                 <!-- SUB-VIEW: LEASE MANAGEMENT -->
-                <div id="lease-management-sub" class="space-y-6">
+                <div id="lease-management-sub" class="hidden space-y-6">
                 <!-- Create Lease Form -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                     <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-file-contract text-blue-600 mr-2"></i>Create New Lease</h2>
