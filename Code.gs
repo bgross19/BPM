@@ -1069,7 +1069,17 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 }
 
 // 5. UPDATE PAYROLL STATUS TO PAID
-function markPayrollPaid(employeeId) {
+function markPayrollPaid(payload) {
+  var employeeId = payload.employeeId;
+  var startDateStr = payload.startDate;
+  var endDateStr = payload.endDate;
+  var paymentMethod = payload.paymentMethod;
+  var amount = payload.amount;
+  var employeeName = payload.employeeName || "";
+
+  var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : null;
+  var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : null;
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1078,37 +1088,115 @@ function markPayrollPaid(employeeId) {
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
     var lastRow = laborSheet.getLastRow();
+    var updated = false;
 
     if (lastRow > 1) {
-      var range = laborSheet.getRange(2, 9, lastRow - 1, 1); // Get only the Payroll_Status column
-      var values = range.getValues();
+      var fullDataRange = laborSheet.getRange(2, 1, lastRow - 1, laborSheet.getLastColumn());
+      var fullDataValues = fullDataRange.getValues();
+      var payrollStatusColIdx = 8; // 0-indexed column 9 (Payroll_Status)
+      var empIdColIdx = 3;         // 0-indexed column 4 (Employee_ID)
+      var dateColIdx = 2;          // 0-indexed column 3 (Date_Completed)
 
-      var empRange = laborSheet.getRange(2, 4, lastRow - 1, 1); // Get Employee_ID column
-      var empValues = empRange.getValues();
+      for (var i = 0; i < fullDataValues.length; i++) {
+        var row = fullDataValues[i];
+        var empIdInRow = (row[empIdColIdx] || '').toString().trim();
+        var status = (row[payrollStatusColIdx] || '').toString().trim().toLowerCase();
 
-      var updated = false;
+        var rawDate = row[dateColIdx];
+        var logDate = rawDate ? new Date(rawDate) : null;
 
-      for (var i = 0; i < values.length; i++) {
-        var empIdInRow = (empValues[i][0] || '').toString().trim();
-        var status = (values[i][0] || '').toString().trim().toLowerCase();
+        // Check date bounds
+        var inDateRange = true;
+        if (startDate && logDate && logDate < startDate) inDateRange = false;
+        if (endDate && logDate && logDate > endDate) inDateRange = false;
 
-        if ((!employeeId || empIdInRow === employeeId) && (status === 'pending' || status === 'approved')) {
-          values[i][0] = 'Paid';
+        if (inDateRange && (!employeeId || empIdInRow === employeeId) && (status === 'pending' || status === 'approved' || status === 'submitted')) {
+          fullDataValues[i][payrollStatusColIdx] = 'Paid';
           updated = true;
         }
       }
 
-      // Perform one bulk update on the single column
       if (updated) {
-        range.setValues(values);
+        fullDataRange.setValues(fullDataValues);
       }
     }
+
+    // Add to payroll history if anything was updated (or even if it wasn't, record the payment)
+    var historySheet = ss.getSheetByName('fact_Payroll_History');
+    if (!historySheet) {
+        historySheet = ss.insertSheet('fact_Payroll_History');
+        historySheet.appendRow([
+            'Payroll_ID',
+            'Employee_ID',
+            'Employee_Name',
+            'Start_Date',
+            'End_Date',
+            'Amount_Paid',
+            'Payment_Method',
+            'Timestamp'
+        ]);
+        historySheet.getRange(1, 1, 1, 8).setFontWeight('bold');
+        historySheet.setFrozenRows(1);
+    }
+
+    var payrollId = "PAY-" + Utilities.getUuid().substring(0, 8).toUpperCase();
+    historySheet.appendRow([
+        payrollId,
+        employeeId,
+        employeeName,
+        startDateStr,
+        endDateStr,
+        amount,
+        paymentMethod,
+        new Date()
+    ]);
+
     return { success: true, message: 'Payroll marked as Paid successfully.' };
   } catch (err) {
     return { success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
+}
+
+// 5.5. GET PAYROLL HISTORY
+function getPayrollHistory() {
+    try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var historySheet = ss.getSheetByName('fact_Payroll_History');
+
+        if (!historySheet) {
+            return { success: true, history: [] }; // Return empty if sheet doesn't exist yet
+        }
+
+        var lastRow = historySheet.getLastRow();
+        if (lastRow <= 1) {
+             return { success: true, history: [] };
+        }
+
+        var data = historySheet.getRange(2, 1, lastRow - 1, 8).getValues();
+        var history = data.map(function(row) {
+            return {
+                payrollId: row[0],
+                employeeId: row[1],
+                employeeName: row[2],
+                startDate: row[3],
+                endDate: row[4],
+                amountPaid: parseFloat(row[5]) || 0,
+                paymentMethod: row[6],
+                timestamp: row[7] ? new Date(row[7]).toISOString() : ''
+            };
+        });
+
+        // Sort by timestamp descending
+        history.sort(function(a, b) {
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+
+        return { success: true, history: history };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
 }
 
 // 6. GENERATE ITEMIZED INVOICE REPORT
@@ -1770,6 +1858,19 @@ function setupDatabase() {
         'Notes',
         'Rent_Month',
         'Rent_Year'
+      ]
+    },
+    {
+      name: 'fact_Payroll_History',
+      headers: [
+        'Payroll_ID',
+        'Employee_ID',
+        'Employee_Name',
+        'Start_Date',
+        'End_Date',
+        'Amount_Paid',
+        'Payment_Method',
+        'Timestamp'
       ]
     }
   ];

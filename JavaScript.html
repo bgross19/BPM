@@ -77,8 +77,19 @@
                             });
                         }, 400);
                     },
-                    markPayrollPaid: function(empId) {
+                    markPayrollPaid: function(payload) {
                         setTimeout(() => callback({ success: true, message: 'Payroll updated' }), 400);
+                    },
+                    getPayrollHistory: function() {
+                        setTimeout(() => {
+                            callback({
+                                success: true,
+                                history: [
+                                    { timestamp: '2026-09-01T12:00:00Z', employeeName: 'Brian Gross', employeeId: 'EMP-001', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1500.00, paymentMethod: 'Direct Deposit' },
+                                    { timestamp: '2026-09-02T12:00:00Z', employeeName: 'Jason R.', employeeId: 'EMP-002', startDate: '2026-08-01', endDate: '2026-08-15', amountPaid: 1200.00, paymentMethod: 'Check' }
+                                ]
+                            });
+                        }, 300);
                     },
                     generateInvoiceReport: function(propId) {
                         setTimeout(() => {
@@ -179,10 +190,10 @@
 
         function switchRole(role) {
             currentRole = role;
-            const adminTab = document.getElementById('tab-admin-view');
             const dashTab = document.getElementById('tab-dashboard-view');
             if (role === 'admin' || role === 'owner') {
-                adminTab.classList.remove('hidden');
+                document.getElementById('tab-payroll-view').classList.remove('hidden');
+                document.getElementById('tab-billing-view').classList.remove('hidden');
                 document.getElementById('tab-lease-view').classList.remove('hidden');
                 document.getElementById('tab-settings-view').classList.remove('hidden');
                 document.getElementById('charge-target-container').classList.remove('hidden');
@@ -191,12 +202,13 @@
 
                 loadLeasesAndTenants();
             } else {
-                adminTab.classList.add('hidden');
+                document.getElementById('tab-payroll-view').classList.add('hidden');
+                document.getElementById('tab-billing-view').classList.add('hidden');
                 dashTab.classList.add('hidden');
                 document.getElementById('tab-lease-view').classList.add('hidden');
                 document.getElementById('tab-settings-view').classList.add('hidden');
                 document.getElementById('charge-target-container').classList.add('hidden');
-                if (!document.getElementById('admin-view').classList.contains('hidden') || !document.getElementById('lease-view').classList.contains('hidden') || !document.getElementById('settings-view').classList.contains('hidden') || !document.getElementById('dashboard-view').classList.contains('hidden')) {
+                if (!document.getElementById('payroll-view').classList.contains('hidden') || !document.getElementById('billing-view').classList.contains('hidden') || !document.getElementById('lease-view').classList.contains('hidden') || !document.getElementById('settings-view').classList.contains('hidden') || !document.getElementById('dashboard-view').classList.contains('hidden')) {
                     switchTab('employee-view');
                 }
             }
@@ -219,11 +231,12 @@
             document.getElementById('employee-view').classList.add('hidden');
             document.getElementById('history-view').classList.add('hidden');
             document.getElementById('dashboard-view').classList.add('hidden');
-            document.getElementById('admin-view').classList.add('hidden');
+            document.getElementById('payroll-view').classList.add('hidden');
+            document.getElementById('billing-view').classList.add('hidden');
             document.getElementById('lease-view').classList.add('hidden');
             document.getElementById('settings-view').classList.add('hidden');
 
-            ['employee-view', 'history-view', 'dashboard-view', 'admin-view', 'lease-view', 'settings-view'].forEach(t => {
+            ['employee-view', 'history-view', 'dashboard-view', 'payroll-view', 'billing-view', 'lease-view', 'settings-view'].forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if(el) {
                     el.classList.remove('border-blue-600', 'text-blue-600');
@@ -421,37 +434,94 @@
 
         // --- PAY PERIOD FILTER HELPERS ---
         function setPayPeriodFilter(type) {
-            const startInput = document.getElementById('admin-start-date');
-            const endInput = document.getElementById('admin-end-date');
+            const pStartInput = document.getElementById('payroll-start-date');
+            const pEndInput = document.getElementById('payroll-end-date');
+            const bStartInput = document.getElementById('billing-start-date');
+            const bEndInput = document.getElementById('billing-end-date');
             const now = new Date();
 
             if (type === 'all') {
-                startInput.value = '';
-                endInput.value = '';
+                pStartInput.value = '';
+                pEndInput.value = '';
+                bStartInput.value = '';
+                bEndInput.value = '';
             } else if (type === 'current') {
                 const dayOfWeek = now.getDay();
                 const start = new Date(now);
                 start.setDate(now.getDate() - dayOfWeek - 7); // Start of 2-week block
-                startInput.valueAsDate = start;
-                endInput.valueAsDate = now;
+                pStartInput.valueAsDate = start;
+                pEndInput.valueAsDate = now;
+                bStartInput.valueAsDate = start;
+                bEndInput.valueAsDate = now;
             } else if (type === 'previous') {
                 const start = new Date(now);
                 start.setDate(now.getDate() - 28);
                 const end = new Date(now);
                 end.setDate(now.getDate() - 14);
-                startInput.valueAsDate = start;
-                endInput.valueAsDate = end;
+                pStartInput.valueAsDate = start;
+                pEndInput.valueAsDate = end;
+                bStartInput.valueAsDate = start;
+                bEndInput.valueAsDate = end;
             }
             loadAdminDashboardData();
         }
 
+        function syncDates(source) {
+            if (source === 'payroll') {
+                document.getElementById('billing-start-date').value = document.getElementById('payroll-start-date').value;
+                document.getElementById('billing-end-date').value = document.getElementById('payroll-end-date').value;
+            } else {
+                document.getElementById('payroll-start-date').value = document.getElementById('billing-start-date').value;
+                document.getElementById('payroll-end-date').value = document.getElementById('billing-end-date').value;
+            }
+        }
+
+        function syncStatuses(source) {
+            if (source === 'payroll') {
+                document.getElementById('billing-status-filter').value = document.getElementById('payroll-status-filter').value;
+            } else {
+                document.getElementById('payroll-status-filter').value = document.getElementById('billing-status-filter').value;
+            }
+        }
+
         // --- ADMIN DASHBOARD CALCULATIONS & RENDERING ---
         function loadAdminDashboardData() {
-            const startDate = document.getElementById('admin-start-date').value;
-            const endDate = document.getElementById('admin-end-date').value;
-            const statusFilter = document.getElementById('admin-status-filter').value;
+            const startDate = document.getElementById('payroll-start-date').value;
+            const endDate = document.getElementById('payroll-end-date').value;
+            const statusFilter = document.getElementById('payroll-status-filter').value;
 
             scriptRunner.withSuccessHandler(renderAdminDashboard).getAdminPayrollData(startDate, endDate, statusFilter);
+            scriptRunner.withSuccessHandler(renderPayrollHistory).getPayrollHistory();
+        }
+
+        function renderPayrollHistory(res) {
+            const historyTbody = document.getElementById('payroll-history-tbody');
+            historyTbody.innerHTML = '';
+            if (!res || !res.success || !res.history || res.history.length === 0) {
+                historyTbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400">No payroll history found.</td></tr>';
+                return;
+            }
+
+            res.history.forEach(log => {
+                const dateLogged = new Date(log.timestamp).toLocaleDateString();
+                const startDateStr = log.startDate ? new Date(log.startDate).toLocaleDateString() : 'Beginning';
+                const endDateStr = log.endDate ? new Date(log.endDate).toLocaleDateString() : 'End';
+
+                let timePeriod = "All Time";
+                if (log.startDate || log.endDate) {
+                    timePeriod = startDateStr + " - " + endDateStr;
+                }
+
+                historyTbody.insertAdjacentHTML('beforeend', `
+                    <tr class="hover:bg-gray-50">
+                        <td class="py-3 px-4 whitespace-nowrap">${dateLogged}</td>
+                        <td class="py-3 px-4 font-medium text-gray-800">${log.employeeName || log.employeeId}</td>
+                        <td class="py-3 px-4">${timePeriod}</td>
+                        <td class="py-3 px-4 font-semibold text-green-700">$${log.amountPaid.toFixed(2)}</td>
+                        <td class="py-3 px-4">${log.paymentMethod || 'Unknown'}</td>
+                    </tr>
+                `);
+            });
         }
 
         function renderAdminDashboard(res) {
@@ -536,7 +606,7 @@
                             <td class="py-3 px-4">${emp.approvedHours.toFixed(1)} hrs</td>
                             <td class="py-3 px-4 font-semibold text-gray-800">$${emp.approvedGrossPay.toFixed(2)}</td>
                             <td class="py-3 px-4 text-right">
-                                <button onclick="markEmployeePayrollPaid('${emp.employeeId}')" ${emp.approvedHours === 0 ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white font-medium rounded-lg shadow-sm transition-colors">
+                                <button onclick="openPayrollPaymentModal('${emp.employeeId}', '${emp.name.replace(/'/g, "\\'")}', ${emp.approvedGrossPay})" ${emp.approvedHours === 0 ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white font-medium rounded-lg shadow-sm transition-colors">
                                     Mark Paid
                                 </button>
                             </td>
@@ -735,15 +805,59 @@
             }).updateApprovalStatus(workLogId, status);
         }
 
-        function markEmployeePayrollPaid(empId) {
+        function openPayrollPaymentModal(empId, empName, amount) {
+            document.getElementById('pp-employee-id').value = empId;
+            document.getElementById('pp-employee-name').value = empName;
+            document.getElementById('pp-amount').value = amount;
+            document.getElementById('pp-start-date').value = document.getElementById('payroll-start-date').value;
+            document.getElementById('pp-end-date').value = document.getElementById('payroll-end-date').value;
+
+            document.getElementById('pp-employee-desc').innerText = empName + " (" + empId + ")";
+            document.getElementById('pp-amount-desc').innerText = "$" + parseFloat(amount).toFixed(2);
+            document.getElementById('pp-payment-mode').value = '';
+
+            const modal = document.getElementById('payroll-payment-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+        }
+
+        function closePayrollPaymentModal() {
+            const modal = document.getElementById('payroll-payment-modal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('payroll-payment-form').reset();
+            }, 300);
+        }
+
+        function submitPayrollPayment(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-pp-payment-btn');
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+            btn.disabled = true;
+
+            const payload = {
+                employeeId: document.getElementById('pp-employee-id').value,
+                employeeName: document.getElementById('pp-employee-name').value,
+                amount: parseFloat(document.getElementById('pp-amount').value),
+                startDate: document.getElementById('pp-start-date').value,
+                endDate: document.getElementById('pp-end-date').value,
+                paymentMethod: document.getElementById('pp-payment-mode').value
+            };
+
             scriptRunner.withSuccessHandler(function(res) {
-                if(res.success) {
-                    showToast('Success', 'Payroll status updated to Paid.', 'success');
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+
+                if (res.success) {
+                    showToast('Success', 'Payroll marked as Paid.', 'success');
+                    closePayrollPaymentModal();
                     loadAdminDashboardData();
                 } else {
                     showToast('Error', res.error, 'error');
                 }
-            }).markPayrollPaid(empId);
+            }).markPayrollPaid(payload);
         }
 
         function openInvoiceReport(propertyId) {
