@@ -2580,3 +2580,129 @@ function deleteTask(taskName) {
     return { success: false, error: error.message };
   }
 }
+
+
+// ==========================================
+// BULK ADD FUNCTIONS
+// ==========================================
+
+function addBillingRatesBulk(payloads) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Billing_Rates');
+    if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
+
+    if (!payloads || payloads.length === 0) return { success: true, message: "No data to add" };
+
+    var rows = [];
+    for (var i = 0; i < payloads.length; i++) {
+      var p = payloads[i];
+      var rateId = Utilities.getUuid();
+      rows.push([
+        rateId,
+        p.taskId,
+        p.taskName || p.taskId,
+        p.employeeId,
+        p.employeeName || p.employeeId,
+        p.rate
+      ]);
+    }
+
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    return { success: true, message: rows.length + " Rates added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function addPropertiesBulk(payloads) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Properties');
+    if (!sheet) throw new Error("Properties sheet not found");
+
+    if (!payloads || payloads.length === 0) return { success: true, message: "No data to add" };
+
+    var rows = [];
+    for (var i = 0; i < payloads.length; i++) {
+      var p = payloads[i];
+      rows.push([
+        p.propertyName,
+        p.ownerCompany || "",
+        p.address || ""
+      ]);
+    }
+
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    return { success: true, message: rows.length + " Properties added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function addEmployeesBulk(payloads) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Employees');
+    if (!sheet) throw new Error("dim_Employees sheet not found");
+
+    if (!payloads || payloads.length === 0) return { success: true, message: "No data to add" };
+
+    var rows = [];
+    for (var i = 0; i < payloads.length; i++) {
+      var p = payloads[i];
+      var newId = p.employeeId || ("EMP-" + Utilities.getUuid().substring(0, 5).toUpperCase());
+      rows.push([
+        newId,
+        p.fullName || "",
+        p.email || "",
+        p.hourlyPayRate || 0,
+        p.role || "Field Crew",
+        p.phoneNumber || "",
+        p.status || "Active"
+      ]);
+    }
+
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    return { success: true, message: rows.length + " Employees added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function addTasksBulk(payloads) {
+  if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('dim_Task_Categories');
+    if (!sheet) throw new Error("dim_Task_Categories sheet not found");
+
+    if (!payloads || payloads.length === 0) return { success: true, message: "No data to add" };
+
+    var rows = [];
+    for (var i = 0; i < payloads.length; i++) {
+      var p = payloads[i];
+      rows.push([
+        p.taskName,
+        p.description || "",
+        p.isBillable ? "Yes" : "No"
+      ]);
+    }
+
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+    return { success: true, message: rows.length + " Tasks added" };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
