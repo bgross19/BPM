@@ -715,6 +715,68 @@ function updateApprovalStatus(workLogId, newStatus) {
   }
 }
 
+// 3.8 UPDATE CUSTOM BILLABLE AMOUNT
+function updateChargeAmount(workLogId, amount) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized. Admin or Owner access required." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
+
+    var lastRow = laborSheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No work logs found.");
+
+    var range = laborSheet.getRange(2, 1, lastRow - 1, 1);
+    var values = range.getValues();
+
+    var rowToUpdate = -1;
+    for (var i = 0; i < values.length; i++) {
+      var id = (values[i][0] || '').toString().trim();
+      if (id === workLogId) {
+        rowToUpdate = i + 2;
+        break;
+      }
+    }
+
+    if (rowToUpdate === -1) {
+      // Also check archive sheet just in case, though editing archived logs is typically not expected
+      var archiveSheet = ss.getSheetByName('archive_fact_Work_Logs');
+      if (archiveSheet) {
+        var aLastRow = archiveSheet.getLastRow();
+        if (aLastRow > 1) {
+          var aRange = archiveSheet.getRange(2, 1, aLastRow - 1, 1);
+          var aValues = aRange.getValues();
+          for (var j = 0; j < aValues.length; j++) {
+            var aId = (aValues[j][0] || '').toString().trim();
+            if (aId === workLogId) {
+              rowToUpdate = j + 2;
+              laborSheet = archiveSheet;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (rowToUpdate === -1) throw new Error("Work log entry not found.");
+
+    // Update only the specific cell (Column L / 12)
+    laborSheet.getRange(rowToUpdate, 12).setValue(amount !== null && amount !== undefined && amount !== '' ? amount : '');
+
+    return { success: true, message: "Billable amount updated successfully." };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // 4. ADMIN PAYROLL & BILLING CALCULATIONS WITH DATE FILTERING
 // Fetches records from fact_Work_Logs, dim_Employees, and fact_Material_Expenses with optional start/end date filtering.
 function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
@@ -776,11 +838,11 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
     var laborData = [];
 
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 12).getValues());
     }
 
     if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 12).getValues());
     }
 
     if (laborData.length > 0) {
@@ -799,7 +861,16 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
         } else if (rateMap[taskId + '_DEFAULT'] !== undefined) {
           billableRate = rateMap[taskId + '_DEFAULT'];
         }
-        var billableAmount = hours * billableRate;
+        var originalBillableAmount = hours * billableRate;
+
+        var customBillableAmountRaw = row[11];
+        var billableAmount = originalBillableAmount;
+        if (customBillableAmountRaw !== undefined && customBillableAmountRaw !== null && customBillableAmountRaw !== '') {
+          var parsedCustom = parseFloat(customBillableAmountRaw);
+          if (!isNaN(parsedCustom)) {
+            billableAmount = parsedCustom;
+          }
+        }
 
         var rawDate = row[2];
         var logDate = rawDate ? new Date(rawDate) : null;
@@ -827,6 +898,7 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
           billingStatus: (row[9] || 'Unbilled').toString().trim(),
           chargeTarget: (row[10] || 'Owner').toString().trim(),
           grossPay: grossPay,
+          originalBillableAmount: originalBillableAmount,
           billableAmount: billableAmount
         });
       });
@@ -1575,7 +1647,8 @@ function setupDatabase() {
         'Work_Notes',
         'Payroll_Status',
         'Billing_Status',
-        'Charge_Target'
+        'Charge_Target',
+        'Charge_Amount_Custom'
       ]
     },
     {
@@ -1591,7 +1664,8 @@ function setupDatabase() {
         'Work_Notes',
         'Payroll_Status',
         'Billing_Status',
-        'Charge_Target'
+        'Charge_Target',
+        'Charge_Amount_Custom'
       ]
     },
     {
