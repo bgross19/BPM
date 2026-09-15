@@ -241,6 +241,13 @@
                     document.getElementById('tasks-sub').classList.contains('hidden')) {
                     switchSettingsSubTab('billing-rates-sub');
                 }
+            } else if (tabId === 'lease-view') {
+                // Default to first subtab if none selected
+                if (document.getElementById('rent-tracking-sub').classList.contains('hidden') &&
+                    document.getElementById('lease-management-sub').classList.contains('hidden') &&
+                    document.getElementById('settlements-sub').classList.contains('hidden')) {
+                    switchRentalSubTab('rent-tracking-sub');
+                }
             } else if (tabId === 'dashboard-view') {
                 loadDashboardData();
             }
