@@ -313,6 +313,620 @@
     const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
         window.onload = function() {
+    const el_role_simulator = document.getElementById('role-simulator');
+    if(el_role_simulator) {
+        el_role_simulator.addEventListener('change', function(event) {
+            switchRole(this.value);
+        });
+    }
+
+    const el_tab_employee_view = document.getElementById('tab-employee-view');
+    if(el_tab_employee_view) {
+        el_tab_employee_view.addEventListener('click', function(event) {
+            switchTab('employee-view');
+        });
+    }
+
+    const el_tab_history_view = document.getElementById('tab-history-view');
+    if(el_tab_history_view) {
+        el_tab_history_view.addEventListener('click', function(event) {
+            switchTab('history-view');
+        });
+    }
+
+    const el_tab_dashboard_view = document.getElementById('tab-dashboard-view');
+    if(el_tab_dashboard_view) {
+        el_tab_dashboard_view.addEventListener('click', function(event) {
+            switchTab('dashboard-view');
+        });
+    }
+
+    const el_tab_payroll_view = document.getElementById('tab-payroll-view');
+    if(el_tab_payroll_view) {
+        el_tab_payroll_view.addEventListener('click', function(event) {
+            switchTab('payroll-view');
+        });
+    }
+
+    const el_tab_billing_view = document.getElementById('tab-billing-view');
+    if(el_tab_billing_view) {
+        el_tab_billing_view.addEventListener('click', function(event) {
+            switchTab('billing-view');
+        });
+    }
+
+    const el_tab_lease_view = document.getElementById('tab-lease-view');
+    if(el_tab_lease_view) {
+        el_tab_lease_view.addEventListener('click', function(event) {
+            switchTab('lease-view');
+        });
+    }
+
+    const el_tab_settings_view = document.getElementById('tab-settings-view');
+    if(el_tab_settings_view) {
+        el_tab_settings_view.addEventListener('click', function(event) {
+            switchTab('settings-view');
+        });
+    }
+
+    const el_work_log_form = document.getElementById('work-log-form');
+    if(el_work_log_form) {
+        el_work_log_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitWorkLog(event);
+        });
+    }
+
+    const el_auto_gen_id_1 = document.getElementById('auto-gen-id-1');
+    if(el_auto_gen_id_1) {
+        el_auto_gen_id_1.addEventListener('click', function(event) {
+            addMaterialRow();
+        });
+    }
+
+    const el_auto_gen_id_2 = document.getElementById('auto-gen-id-2');
+    if(el_auto_gen_id_2) {
+        el_auto_gen_id_2.addEventListener('click', function(event) {
+            loadEmployeeHistory();
+        });
+    }
+
+    const el_tab_rent_tracking_sub = document.getElementById('tab-rent-tracking-sub');
+    if(el_tab_rent_tracking_sub) {
+        el_tab_rent_tracking_sub.addEventListener('click', function(event) {
+            switchRentalSubTab('rent-tracking-sub');
+        });
+    }
+
+    const el_tab_lease_management_sub = document.getElementById('tab-lease-management-sub');
+    if(el_tab_lease_management_sub) {
+        el_tab_lease_management_sub.addEventListener('click', function(event) {
+            switchRentalSubTab('lease-management-sub');
+        });
+    }
+
+    const el_tab_settlements_sub = document.getElementById('tab-settlements-sub');
+    if(el_tab_settlements_sub) {
+        el_tab_settlements_sub.addEventListener('click', function(event) {
+            switchRentalSubTab('settlements-sub');
+        });
+    }
+
+    const el_rt_year_filter = document.getElementById('rt-year-filter');
+    if(el_rt_year_filter) {
+        el_rt_year_filter.addEventListener('change', function(event) {
+            loadRentTrackingData();
+        });
+    }
+
+    const el_rt_owner_filter = document.getElementById('rt-owner-filter');
+    if(el_rt_owner_filter) {
+        el_rt_owner_filter.addEventListener('input', function(event) {
+            filterRentTrackingTable();
+        });
+    }
+
+    const el_rt_address_filter = document.getElementById('rt-address-filter');
+    if(el_rt_address_filter) {
+        el_rt_address_filter.addEventListener('input', function(event) {
+            filterRentTrackingTable();
+        });
+    }
+
+    const el_auto_gen_id_3 = document.getElementById('auto-gen-id-3');
+    if(el_auto_gen_id_3) {
+        el_auto_gen_id_3.addEventListener('click', function(event) {
+            sortRentTracking(0);
+        });
+    }
+
+    const el_auto_gen_id_4 = document.getElementById('auto-gen-id-4');
+    if(el_auto_gen_id_4) {
+        el_auto_gen_id_4.addEventListener('click', function(event) {
+            sortRentTracking(1);
+        });
+    }
+
+    const el_auto_gen_id_5 = document.getElementById('auto-gen-id-5');
+    if(el_auto_gen_id_5) {
+        el_auto_gen_id_5.addEventListener('click', function(event) {
+            sortRentTracking(2);
+        });
+    }
+
+    const el_auto_gen_id_6 = document.getElementById('auto-gen-id-6');
+    if(el_auto_gen_id_6) {
+        el_auto_gen_id_6.addEventListener('click', function(event) {
+            sortRentTracking(3);
+        });
+    }
+
+    const el_create_lease_form = document.getElementById('create-lease-form');
+    if(el_create_lease_form) {
+        el_create_lease_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitNewLease(event);
+        });
+    }
+
+    const el_auto_gen_id_7 = document.getElementById('auto-gen-id-7');
+    if(el_auto_gen_id_7) {
+        el_auto_gen_id_7.addEventListener('click', function(event) {
+            addTenantRow();
+        });
+    }
+
+    const el_ledger_lease_select = document.getElementById('ledger-lease-select');
+    if(el_ledger_lease_select) {
+        el_ledger_lease_select.addEventListener('change', function(event) {
+            updateTenantDropdownAndBalance();
+        });
+    }
+
+    const el_ledger_entry_form = document.getElementById('ledger-entry-form');
+    if(el_ledger_entry_form) {
+        el_ledger_entry_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitLedgerEntry(event);
+        });
+    }
+
+    const el_owner_settlement_form = document.getElementById('owner-settlement-form');
+    if(el_owner_settlement_form) {
+        el_owner_settlement_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            generateOwnerSettlementUI(event);
+        });
+    }
+
+    const el_btn_export_os = document.getElementById('btn-export-os');
+    if(el_btn_export_os) {
+        el_btn_export_os.addEventListener('click', function(event) {
+            exportOS();
+        });
+    }
+
+    const el_sd_settlement_form = document.getElementById('sd-settlement-form');
+    if(el_sd_settlement_form) {
+        el_sd_settlement_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            generateSDSettlementUI(event);
+        });
+    }
+
+    const el_btn_export_sd = document.getElementById('btn-export-sd');
+    if(el_btn_export_sd) {
+        el_btn_export_sd.addEventListener('click', function(event) {
+            exportSD();
+        });
+    }
+
+    const el_auto_gen_id_8 = document.getElementById('auto-gen-id-8');
+    if(el_auto_gen_id_8) {
+        el_auto_gen_id_8.addEventListener('click', function(event) {
+            loadDashboardData();
+        });
+    }
+
+    const el_auto_gen_id_9 = document.getElementById('auto-gen-id-9');
+    if(el_auto_gen_id_9) {
+        el_auto_gen_id_9.addEventListener('click', function(event) {
+            setPayPeriodFilter('current');
+        });
+    }
+
+    const el_auto_gen_id_10 = document.getElementById('auto-gen-id-10');
+    if(el_auto_gen_id_10) {
+        el_auto_gen_id_10.addEventListener('click', function(event) {
+            setPayPeriodFilter('previous');
+        });
+    }
+
+    const el_auto_gen_id_11 = document.getElementById('auto-gen-id-11');
+    if(el_auto_gen_id_11) {
+        el_auto_gen_id_11.addEventListener('click', function(event) {
+            setPayPeriodFilter('all');
+        });
+    }
+
+    const el_payroll_start_date = document.getElementById('payroll-start-date');
+    if(el_payroll_start_date) {
+        el_payroll_start_date.addEventListener('change', function(event) {
+            syncDates('payroll'); loadAdminDashboardData();
+        });
+    }
+
+    const el_payroll_end_date = document.getElementById('payroll-end-date');
+    if(el_payroll_end_date) {
+        el_payroll_end_date.addEventListener('change', function(event) {
+            syncDates('payroll'); loadAdminDashboardData();
+        });
+    }
+
+    const el_payroll_status_filter = document.getElementById('payroll-status-filter');
+    if(el_payroll_status_filter) {
+        el_payroll_status_filter.addEventListener('change', function(event) {
+            syncStatuses('payroll'); loadAdminDashboardData();
+        });
+    }
+
+    const el_auto_gen_id_12 = document.getElementById('auto-gen-id-12');
+    if(el_auto_gen_id_12) {
+        el_auto_gen_id_12.addEventListener('click', function(event) {
+            setPayPeriodFilter('current');
+        });
+    }
+
+    const el_auto_gen_id_13 = document.getElementById('auto-gen-id-13');
+    if(el_auto_gen_id_13) {
+        el_auto_gen_id_13.addEventListener('click', function(event) {
+            setPayPeriodFilter('previous');
+        });
+    }
+
+    const el_auto_gen_id_14 = document.getElementById('auto-gen-id-14');
+    if(el_auto_gen_id_14) {
+        el_auto_gen_id_14.addEventListener('click', function(event) {
+            setPayPeriodFilter('all');
+        });
+    }
+
+    const el_billing_start_date = document.getElementById('billing-start-date');
+    if(el_billing_start_date) {
+        el_billing_start_date.addEventListener('change', function(event) {
+            syncDates('billing'); loadAdminDashboardData();
+        });
+    }
+
+    const el_billing_end_date = document.getElementById('billing-end-date');
+    if(el_billing_end_date) {
+        el_billing_end_date.addEventListener('change', function(event) {
+            syncDates('billing'); loadAdminDashboardData();
+        });
+    }
+
+    const el_billing_status_filter = document.getElementById('billing-status-filter');
+    if(el_billing_status_filter) {
+        el_billing_status_filter.addEventListener('change', function(event) {
+            syncStatuses('billing'); loadAdminDashboardData();
+        });
+    }
+
+    const el_auto_gen_id_15 = document.getElementById('auto-gen-id-15');
+    if(el_auto_gen_id_15) {
+        el_auto_gen_id_15.addEventListener('click', function(event) {
+            loadAdminDashboardData();
+        });
+    }
+
+    const el_auto_gen_id_16 = document.getElementById('auto-gen-id-16');
+    if(el_auto_gen_id_16) {
+        el_auto_gen_id_16.addEventListener('click', function(event) {
+            closeEditModal();
+        });
+    }
+
+    const el_edit_punch_form = document.getElementById('edit-punch-form');
+    if(el_edit_punch_form) {
+        el_edit_punch_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitPunchEdit(event);
+        });
+    }
+
+    const el_auto_gen_id_17 = document.getElementById('auto-gen-id-17');
+    if(el_auto_gen_id_17) {
+        el_auto_gen_id_17.addEventListener('click', function(event) {
+            closeEditModal();
+        });
+    }
+
+    const el_auto_gen_id_18 = document.getElementById('auto-gen-id-18');
+    if(el_auto_gen_id_18) {
+        el_auto_gen_id_18.addEventListener('click', function(event) {
+            closeInvoiceModal();
+        });
+    }
+
+    const el_export_pdf_btn = document.getElementById('export-pdf-btn');
+    if(el_export_pdf_btn) {
+        el_export_pdf_btn.addEventListener('click', function(event) {
+            exportInvoicePDF();
+        });
+    }
+
+    const el_auto_gen_id_19 = document.getElementById('auto-gen-id-19');
+    if(el_auto_gen_id_19) {
+        el_auto_gen_id_19.addEventListener('click', function(event) {
+            closeInvoiceModal();
+        });
+    }
+
+    const el_mark_billed_btn = document.getElementById('mark-billed-btn');
+    if(el_mark_billed_btn) {
+        el_mark_billed_btn.addEventListener('click', function(event) {
+            executeMarkBilled();
+        });
+    }
+
+    const el_auto_gen_id_20 = document.getElementById('auto-gen-id-20');
+    if(el_auto_gen_id_20) {
+        el_auto_gen_id_20.addEventListener('click', function(event) {
+            closeWarningModal(false);
+        });
+    }
+
+    const el_auto_gen_id_21 = document.getElementById('auto-gen-id-21');
+    if(el_auto_gen_id_21) {
+        el_auto_gen_id_21.addEventListener('click', function(event) {
+            closeWarningModal(true);
+        });
+    }
+
+    const el_tab_billing_rates_sub = document.getElementById('tab-billing-rates-sub');
+    if(el_tab_billing_rates_sub) {
+        el_tab_billing_rates_sub.addEventListener('click', function(event) {
+            switchSettingsSubTab('billing-rates-sub');
+        });
+    }
+
+    const el_tab_properties_sub = document.getElementById('tab-properties-sub');
+    if(el_tab_properties_sub) {
+        el_tab_properties_sub.addEventListener('click', function(event) {
+            switchSettingsSubTab('properties-sub');
+        });
+    }
+
+    const el_tab_employees_sub = document.getElementById('tab-employees-sub');
+    if(el_tab_employees_sub) {
+        el_tab_employees_sub.addEventListener('click', function(event) {
+            switchSettingsSubTab('employees-sub');
+        });
+    }
+
+    const el_tab_tasks_sub = document.getElementById('tab-tasks-sub');
+    if(el_tab_tasks_sub) {
+        el_tab_tasks_sub.addEventListener('click', function(event) {
+            switchSettingsSubTab('tasks-sub');
+        });
+    }
+
+    const el_auto_gen_id_22 = document.getElementById('auto-gen-id-22');
+    if(el_auto_gen_id_22) {
+        el_auto_gen_id_22.addEventListener('click', function(event) {
+            openRateModal();
+        });
+    }
+
+    const el_auto_gen_id_23 = document.getElementById('auto-gen-id-23');
+    if(el_auto_gen_id_23) {
+        el_auto_gen_id_23.addEventListener('click', function(event) {
+            openBulkAddModal('rates');
+        });
+    }
+
+    const el_auto_gen_id_24 = document.getElementById('auto-gen-id-24');
+    if(el_auto_gen_id_24) {
+        el_auto_gen_id_24.addEventListener('click', function(event) {
+            openPropertyModal();
+        });
+    }
+
+    const el_auto_gen_id_25 = document.getElementById('auto-gen-id-25');
+    if(el_auto_gen_id_25) {
+        el_auto_gen_id_25.addEventListener('click', function(event) {
+            openBulkAddModal('properties');
+        });
+    }
+
+    const el_auto_gen_id_26 = document.getElementById('auto-gen-id-26');
+    if(el_auto_gen_id_26) {
+        el_auto_gen_id_26.addEventListener('click', function(event) {
+            openEmployeeModal();
+        });
+    }
+
+    const el_auto_gen_id_27 = document.getElementById('auto-gen-id-27');
+    if(el_auto_gen_id_27) {
+        el_auto_gen_id_27.addEventListener('click', function(event) {
+            openBulkAddModal('employees');
+        });
+    }
+
+    const el_auto_gen_id_28 = document.getElementById('auto-gen-id-28');
+    if(el_auto_gen_id_28) {
+        el_auto_gen_id_28.addEventListener('click', function(event) {
+            openTaskModal();
+        });
+    }
+
+    const el_auto_gen_id_29 = document.getElementById('auto-gen-id-29');
+    if(el_auto_gen_id_29) {
+        el_auto_gen_id_29.addEventListener('click', function(event) {
+            openBulkAddModal('tasks');
+        });
+    }
+
+    const el_auto_gen_id_30 = document.getElementById('auto-gen-id-30');
+    if(el_auto_gen_id_30) {
+        el_auto_gen_id_30.addEventListener('click', function(event) {
+            closeRateModal();
+        });
+    }
+
+    const el_rate_form = document.getElementById('rate-form');
+    if(el_rate_form) {
+        el_rate_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitRate(event);
+        });
+    }
+
+    const el_auto_gen_id_31 = document.getElementById('auto-gen-id-31');
+    if(el_auto_gen_id_31) {
+        el_auto_gen_id_31.addEventListener('click', function(event) {
+            closeRateModal();
+        });
+    }
+
+    const el_auto_gen_id_32 = document.getElementById('auto-gen-id-32');
+    if(el_auto_gen_id_32) {
+        el_auto_gen_id_32.addEventListener('click', function(event) {
+            closePropertyModal();
+        });
+    }
+
+    const el_property_form = document.getElementById('property-form');
+    if(el_property_form) {
+        el_property_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitProperty(event);
+        });
+    }
+
+    const el_auto_gen_id_33 = document.getElementById('auto-gen-id-33');
+    if(el_auto_gen_id_33) {
+        el_auto_gen_id_33.addEventListener('click', function(event) {
+            closePropertyModal();
+        });
+    }
+
+    const el_auto_gen_id_34 = document.getElementById('auto-gen-id-34');
+    if(el_auto_gen_id_34) {
+        el_auto_gen_id_34.addEventListener('click', function(event) {
+            closeEmployeeModal();
+        });
+    }
+
+    const el_employee_form = document.getElementById('employee-form');
+    if(el_employee_form) {
+        el_employee_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitEmployee(event);
+        });
+    }
+
+    const el_auto_gen_id_35 = document.getElementById('auto-gen-id-35');
+    if(el_auto_gen_id_35) {
+        el_auto_gen_id_35.addEventListener('click', function(event) {
+            closeEmployeeModal();
+        });
+    }
+
+    const el_auto_gen_id_36 = document.getElementById('auto-gen-id-36');
+    if(el_auto_gen_id_36) {
+        el_auto_gen_id_36.addEventListener('click', function(event) {
+            closeBulkAddModal();
+        });
+    }
+
+    const el_bulk_add_form = document.getElementById('bulk-add-form');
+    if(el_bulk_add_form) {
+        el_bulk_add_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitBulkAdd(event);
+        });
+    }
+
+    const el_auto_gen_id_37 = document.getElementById('auto-gen-id-37');
+    if(el_auto_gen_id_37) {
+        el_auto_gen_id_37.addEventListener('click', function(event) {
+            addBulkRow();
+        });
+    }
+
+    const el_auto_gen_id_38 = document.getElementById('auto-gen-id-38');
+    if(el_auto_gen_id_38) {
+        el_auto_gen_id_38.addEventListener('click', function(event) {
+            closeBulkAddModal();
+        });
+    }
+
+    const el_auto_gen_id_39 = document.getElementById('auto-gen-id-39');
+    if(el_auto_gen_id_39) {
+        el_auto_gen_id_39.addEventListener('click', function(event) {
+            closeTaskModal();
+        });
+    }
+
+    const el_task_form = document.getElementById('task-form');
+    if(el_task_form) {
+        el_task_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitTask(event);
+        });
+    }
+
+    const el_auto_gen_id_40 = document.getElementById('auto-gen-id-40');
+    if(el_auto_gen_id_40) {
+        el_auto_gen_id_40.addEventListener('click', function(event) {
+            closeTaskModal();
+        });
+    }
+
+    const el_auto_gen_id_41 = document.getElementById('auto-gen-id-41');
+    if(el_auto_gen_id_41) {
+        el_auto_gen_id_41.addEventListener('click', function(event) {
+            closePayrollPaymentModal();
+        });
+    }
+
+    const el_payroll_payment_form = document.getElementById('payroll-payment-form');
+    if(el_payroll_payment_form) {
+        el_payroll_payment_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitPayrollPayment(event);
+        });
+    }
+
+    const el_auto_gen_id_42 = document.getElementById('auto-gen-id-42');
+    if(el_auto_gen_id_42) {
+        el_auto_gen_id_42.addEventListener('click', function(event) {
+            closePayrollPaymentModal();
+        });
+    }
+
+    const el_auto_gen_id_43 = document.getElementById('auto-gen-id-43');
+    if(el_auto_gen_id_43) {
+        el_auto_gen_id_43.addEventListener('click', function(event) {
+            closeRentPaymentModal();
+        });
+    }
+
+    const el_rent_payment_form = document.getElementById('rent-payment-form');
+    if(el_rent_payment_form) {
+        el_rent_payment_form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            submitRentTrackingPayment(event);
+        });
+    }
+
+    const el_auto_gen_id_44 = document.getElementById('auto-gen-id-44');
+    if(el_auto_gen_id_44) {
+        el_auto_gen_id_44.addEventListener('click', function(event) {
+            closeRentPaymentModal();
+        });
+    }
             initRentTracking();
             scriptRunner.withSuccessHandler(populateDatalists).getDropdownData();
             scriptRunner.withSuccessHandler(function(userInfo) {
