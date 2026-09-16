@@ -7,8 +7,6 @@
         let activeInvoiceProperty = null;
         let userPunchesCache = [];
 
-        document.getElementById('log-date').valueAsDate = new Date();
-
         // Environment Runner
         const mockGoogleScriptRun = (function() {
         function createRunner(successCb, failureCb) {
@@ -313,6 +311,10 @@
     const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
         window.onload = function() {
+    const logDateInput = document.getElementById('log-date');
+    if (logDateInput) {
+        logDateInput.valueAsDate = new Date();
+    }
     const el_role_simulator = document.getElementById('role-simulator');
     if(el_role_simulator) {
         el_role_simulator.addEventListener('change', function(event) {
