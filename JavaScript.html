@@ -310,7 +310,7 @@
     })();
     const scriptRunner = (typeof google !== 'undefined' && google.script) ? google.script.run : mockGoogleScriptRun;
 
-        window.onload = function() {
+    function initializeApp() {
     const logDateInput = document.getElementById('log-date');
     if (logDateInput) {
         logDateInput.valueAsDate = new Date();
@@ -950,7 +950,13 @@
                 }
             }).getUserRole();
             initDashboardDates();
-        };
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
 
         function populateDatalists(data) {
             validProperties = data.properties;
