@@ -28,7 +28,7 @@
             workLogForm.addEventListener('submit', submitWorkLog);
         }
 
-        const btnAddMaterial = document.getElementById('auto-gen-id-1');
+        const btnAddMaterial = document.getElementById('btn-add-material');
         if (btnAddMaterial) {
             btnAddMaterial.addEventListener('click', addMaterialRow);
         }
@@ -62,6 +62,256 @@
             .getUserRole();
             
         initDashboardDates();
+        initRentTracking();
+        // Add all missing event listeners
+
+        // Main Form Submissions
+        const editPunchForm = document.getElementById('edit-punch-form');
+        if (editPunchForm) editPunchForm.addEventListener('submit', submitPunchEdit);
+
+        const createLeaseForm = document.getElementById('create-lease-form');
+        if (createLeaseForm) createLeaseForm.addEventListener('submit', submitNewLease);
+
+        const ledgerEntryForm = document.getElementById('ledger-entry-form');
+        if (ledgerEntryForm) ledgerEntryForm.addEventListener('submit', submitLedgerEntry);
+
+        const ownerSettlementForm = document.getElementById('owner-settlement-form');
+        if (ownerSettlementForm) ownerSettlementForm.addEventListener('submit', generateOwnerSettlementUI);
+
+        const sdSettlementForm = document.getElementById('sd-settlement-form');
+        if (sdSettlementForm) sdSettlementForm.addEventListener('submit', generateSDSettlementUI);
+
+        const rateForm = document.getElementById('rate-form');
+        if (rateForm) rateForm.addEventListener('submit', submitRate);
+
+        const propertyForm = document.getElementById('property-form');
+        if (propertyForm) propertyForm.addEventListener('submit', submitProperty);
+
+        const employeeForm = document.getElementById('employee-form');
+        if (employeeForm) employeeForm.addEventListener('submit', submitEmployee);
+
+        const bulkAddForm = document.getElementById('bulk-add-form');
+        if (bulkAddForm) bulkAddForm.addEventListener('submit', submitBulkAdd);
+
+        const taskForm = document.getElementById('task-form');
+        if (taskForm) taskForm.addEventListener('submit', submitTask);
+
+        const payrollPaymentForm = document.getElementById('payroll-payment-form');
+        if (payrollPaymentForm) payrollPaymentForm.addEventListener('submit', submitPayrollPayment);
+
+        const rentPaymentForm = document.getElementById('rent-payment-form');
+        if (rentPaymentForm) rentPaymentForm.addEventListener('submit', submitRentTrackingPayment);
+
+        // Modals
+        // Edit Punch
+        const btnCloseEditPunch = document.getElementById('btn-close-edit-punch');
+        if (btnCloseEditPunch) btnCloseEditPunch.addEventListener('click', closeEditPunchModal);
+
+        const btnCancelEditPunch = document.getElementById('btn-cancel-edit-punch');
+        if (btnCancelEditPunch) btnCancelEditPunch.addEventListener('click', closeEditPunchModal);
+
+        // Property Invoices
+        const btnCloseInvoice = document.getElementById('btn-close-invoice');
+        if (btnCloseInvoice) btnCloseInvoice.addEventListener('click', closeInvoiceModal);
+
+        const btnCancelInvoice = document.getElementById('btn-cancel-invoice');
+        if (btnCancelInvoice) btnCancelInvoice.addEventListener('click', closeInvoiceModal);
+
+        const btnExportPdf = document.getElementById('export-pdf-btn');
+        if (btnExportPdf) btnExportPdf.addEventListener('click', exportInvoicePDF);
+
+        const btnMarkBilled = document.getElementById('mark-billed-btn');
+        if (btnMarkBilled) btnMarkBilled.addEventListener('click', executeMarkBilled);
+
+        // Warning Modal
+        const btnCancelWarning = document.getElementById('btn-cancel-warning');
+        if (btnCancelWarning) btnCancelWarning.addEventListener('click', () => closeWarningModal(false));
+
+        const btnProceedWarning = document.getElementById('btn-proceed-warning');
+        if (btnProceedWarning) btnProceedWarning.addEventListener('click', () => closeWarningModal(true));
+
+        // Settings: Rate
+        const btnCloseRate = document.getElementById('btn-close-rate');
+        if (btnCloseRate) btnCloseRate.addEventListener('click', closeRateModal);
+
+        const btnCancelRate = document.getElementById('btn-cancel-rate');
+        if (btnCancelRate) btnCancelRate.addEventListener('click', closeRateModal);
+
+        const btnAddRate = document.getElementById('btn-add-rate');
+        if (btnAddRate) btnAddRate.addEventListener('click', openRateModal);
+
+        const btnBulkAddRate = document.getElementById('btn-bulk-add-rate');
+        if (btnBulkAddRate) btnBulkAddRate.addEventListener('click', () => openBulkAddModal('rates'));
+
+        // Settings: Property
+        const btnCloseProperty = document.getElementById('btn-close-property');
+        if (btnCloseProperty) btnCloseProperty.addEventListener('click', closePropertyModal);
+
+        const btnCancelProperty = document.getElementById('btn-cancel-property');
+        if (btnCancelProperty) btnCancelProperty.addEventListener('click', closePropertyModal);
+
+        const btnAddProperty = document.getElementById('btn-add-property');
+        if (btnAddProperty) btnAddProperty.addEventListener('click', openPropertyModal);
+
+        const btnBulkAddProperty = document.getElementById('btn-bulk-add-property');
+        if (btnBulkAddProperty) btnBulkAddProperty.addEventListener('click', () => openBulkAddModal('properties'));
+
+        // Settings: Employee
+        const btnCloseEmployee = document.getElementById('btn-close-employee');
+        if (btnCloseEmployee) btnCloseEmployee.addEventListener('click', closeEmployeeModal);
+
+        const btnCancelEmployee = document.getElementById('btn-cancel-employee');
+        if (btnCancelEmployee) btnCancelEmployee.addEventListener('click', closeEmployeeModal);
+
+        const btnAddEmployee = document.getElementById('btn-add-employee');
+        if (btnAddEmployee) btnAddEmployee.addEventListener('click', openEmployeeModal);
+
+        const btnBulkAddEmployee = document.getElementById('btn-bulk-add-employee');
+        if (btnBulkAddEmployee) btnBulkAddEmployee.addEventListener('click', () => openBulkAddModal('employees'));
+
+        // Settings: Task
+        const btnCloseTask = document.getElementById('btn-close-task');
+        if (btnCloseTask) btnCloseTask.addEventListener('click', closeTaskModal);
+
+        const btnCancelTask = document.getElementById('btn-cancel-task');
+        if (btnCancelTask) btnCancelTask.addEventListener('click', closeTaskModal);
+
+        const btnAddTask = document.getElementById('btn-add-task');
+        if (btnAddTask) btnAddTask.addEventListener('click', openTaskModal);
+
+        const btnBulkAddTask = document.getElementById('btn-bulk-add-task');
+        if (btnBulkAddTask) btnBulkAddTask.addEventListener('click', () => openBulkAddModal('tasks'));
+
+        // Bulk Add Modal
+        const btnCloseBulk = document.getElementById('btn-close-bulk');
+        if (btnCloseBulk) btnCloseBulk.addEventListener('click', closeBulkAddModal);
+
+        const btnCancelBulk = document.getElementById('btn-cancel-bulk');
+        if (btnCancelBulk) btnCancelBulk.addEventListener('click', closeBulkAddModal);
+
+        const btnAddBulkRow = document.getElementById('btn-add-bulk-row');
+        if (btnAddBulkRow) btnAddBulkRow.addEventListener('click', () => addBulkRow());
+
+        // Payroll Payment
+        const btnClosePpPayment = document.getElementById('btn-close-pp-payment');
+        if (btnClosePpPayment) btnClosePpPayment.addEventListener('click', closePayrollPaymentModal);
+
+        const btnCancelPpPayment = document.getElementById('btn-cancel-pp-payment');
+        if (btnCancelPpPayment) btnCancelPpPayment.addEventListener('click', closePayrollPaymentModal);
+
+        // Rent Payment
+        const btnCloseRtPayment = document.getElementById('btn-close-rt-payment');
+        if (btnCloseRtPayment) btnCloseRtPayment.addEventListener('click', closeRentPaymentModal);
+
+        const btnCancelRtPayment = document.getElementById('btn-cancel-rt-payment');
+        if (btnCancelRtPayment) btnCancelRtPayment.addEventListener('click', closeRentPaymentModal);
+
+        // Buttons
+        const btnRefreshHistory = document.getElementById('btn-refresh-history');
+        if (btnRefreshHistory) btnRefreshHistory.addEventListener('click', loadEmployeeHistory);
+
+        const btnRefreshApprovals = document.getElementById('btn-refresh-approvals');
+        if (btnRefreshApprovals) btnRefreshApprovals.addEventListener('click', loadAdminDashboardData);
+
+        const btnAddTenant = document.getElementById('btn-add-tenant');
+        if (btnAddTenant) btnAddTenant.addEventListener('click', addTenantRow);
+
+        const btnFilterDashboard = document.getElementById('btn-filter-dashboard');
+        if (btnFilterDashboard) btnFilterDashboard.addEventListener('click', loadDashboardData);
+
+        const btnExportOs = document.getElementById('btn-export-os');
+        if (btnExportOs) btnExportOs.addEventListener('click', exportOS);
+
+        const btnExportSd = document.getElementById('btn-export-sd');
+        if (btnExportSd) btnExportSd.addEventListener('click', exportSD);
+
+        // Filters & Ranges
+        const btnPayThisBiweekly = document.getElementById('btn-pay-this-biweekly');
+        if (btnPayThisBiweekly) btnPayThisBiweekly.addEventListener('click', () => setPayPeriodFilter('current'));
+
+        const btnPayLastBiweekly = document.getElementById('btn-pay-last-biweekly');
+        if (btnPayLastBiweekly) btnPayLastBiweekly.addEventListener('click', () => setPayPeriodFilter('previous'));
+
+        const btnPayAllTime = document.getElementById('btn-pay-all-time');
+        if (btnPayAllTime) btnPayAllTime.addEventListener('click', () => setPayPeriodFilter('all'));
+
+        const btnBillThisBiweekly = document.getElementById('btn-bill-this-biweekly');
+        if (btnBillThisBiweekly) btnBillThisBiweekly.addEventListener('click', () => setPayPeriodFilter('current'));
+
+        const btnBillLastBiweekly = document.getElementById('btn-bill-last-biweekly');
+        if (btnBillLastBiweekly) btnBillLastBiweekly.addEventListener('click', () => setPayPeriodFilter('previous'));
+
+        const btnBillAllTime = document.getElementById('btn-bill-all-time');
+        if (btnBillAllTime) btnBillAllTime.addEventListener('click', () => setPayPeriodFilter('all'));
+
+        const payrollStartDate = document.getElementById('payroll-start-date');
+        if (payrollStartDate) payrollStartDate.addEventListener('change', () => syncDates('payroll'));
+
+        const payrollEndDate = document.getElementById('payroll-end-date');
+        if (payrollEndDate) payrollEndDate.addEventListener('change', () => syncDates('payroll'));
+
+        const billingStartDate = document.getElementById('billing-start-date');
+        if (billingStartDate) billingStartDate.addEventListener('change', () => syncDates('billing'));
+
+        const billingEndDate = document.getElementById('billing-end-date');
+        if (billingEndDate) billingEndDate.addEventListener('change', () => syncDates('billing'));
+
+        const payrollStatusFilter = document.getElementById('payroll-status-filter');
+        if (payrollStatusFilter) payrollStatusFilter.addEventListener('change', () => { syncStatuses('payroll'); loadAdminDashboardData(); });
+
+        const billingStatusFilter = document.getElementById('billing-status-filter');
+        if (billingStatusFilter) billingStatusFilter.addEventListener('change', () => { syncStatuses('billing'); loadAdminDashboardData(); });
+
+        const rtYearFilter = document.getElementById('rt-year-filter');
+        if (rtYearFilter) rtYearFilter.addEventListener('change', loadRentTrackingData);
+
+        const rtOwnerFilter = document.getElementById('rt-owner-filter');
+        if (rtOwnerFilter) rtOwnerFilter.addEventListener('input', filterRentTrackingTable);
+
+        const rtAddressFilter = document.getElementById('rt-address-filter');
+        if (rtAddressFilter) rtAddressFilter.addEventListener('input', filterRentTrackingTable);
+
+        const ledgerLeaseSelect = document.getElementById('ledger-lease-select');
+        if (ledgerLeaseSelect) ledgerLeaseSelect.addEventListener('change', updateTenantDropdownAndBalance);
+
+        const roleSimulator = document.getElementById('role-simulator');
+        if (roleSimulator) roleSimulator.addEventListener('change', (e) => switchRole(e.target.value));
+
+        // Sub tabs
+        const tabRentTrackingSub = document.getElementById('tab-rent-tracking-sub');
+        if (tabRentTrackingSub) tabRentTrackingSub.addEventListener('click', () => switchRentalSubTab('rent-tracking-sub'));
+
+        const tabLeaseManagementSub = document.getElementById('tab-lease-management-sub');
+        if (tabLeaseManagementSub) tabLeaseManagementSub.addEventListener('click', () => switchRentalSubTab('lease-management-sub'));
+
+        const tabSettlementsSub = document.getElementById('tab-settlements-sub');
+        if (tabSettlementsSub) tabSettlementsSub.addEventListener('click', () => switchRentalSubTab('settlements-sub'));
+
+        const tabBillingRatesSub = document.getElementById('tab-billing-rates-sub');
+        if (tabBillingRatesSub) tabBillingRatesSub.addEventListener('click', () => switchSettingsSubTab('billing-rates-sub'));
+
+        const tabPropertiesSub = document.getElementById('tab-properties-sub');
+        if (tabPropertiesSub) tabPropertiesSub.addEventListener('click', () => switchSettingsSubTab('properties-sub'));
+
+        const tabEmployeesSub = document.getElementById('tab-employees-sub');
+        if (tabEmployeesSub) tabEmployeesSub.addEventListener('click', () => switchSettingsSubTab('employees-sub'));
+
+        const tabTasksSub = document.getElementById('tab-tasks-sub');
+        if (tabTasksSub) tabTasksSub.addEventListener('click', () => switchSettingsSubTab('tasks-sub'));
+
+        // Sorting
+        const rtSortProp = document.getElementById('rt-sort-prop');
+        if (rtSortProp) rtSortProp.addEventListener('click', () => sortRentTracking(0));
+
+        const rtSortOwner = document.getElementById('rt-sort-owner');
+        if (rtSortOwner) rtSortOwner.addEventListener('click', () => sortRentTracking(1));
+
+        const rtSortAddress = document.getElementById('rt-sort-address');
+        if (rtSortAddress) rtSortAddress.addEventListener('click', () => sortRentTracking(2));
+
+        const rtSortTenant = document.getElementById('rt-sort-tenant');
+        if (rtSortTenant) rtSortTenant.addEventListener('click', () => sortRentTracking(3));
+
     }
 
     if (document.readyState === 'loading') {
@@ -414,7 +664,7 @@
         setTimeout(() => { modal.classList.remove('opacity-0'); document.getElementById('edit-modal-content').classList.remove('scale-95'); }, 10);
     }
 
-    function closeEditModal() {
+    function closeEditPunchModal() {
         const modal = document.getElementById('edit-punch-modal');
         modal.classList.add('opacity-0');
         document.getElementById('edit-modal-content').classList.add('scale-95');
@@ -441,7 +691,7 @@
             .withSuccessHandler(function(res) {
                 btn.innerText = originalBtnText;
                 btn.disabled = false;
-                if (res.success) { showToast('Success', 'Punch log updated successfully.', 'success'); closeEditModal(); loadEmployeeHistory(); } 
+                if (res.success) { showToast('Success', 'Punch log updated successfully.', 'success'); closeEditPunchModal(); loadEmployeeHistory(); }
                 else showToast('Error', res.error, 'error');
             })
             .withFailureHandler(function(err) {
