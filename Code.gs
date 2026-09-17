@@ -688,6 +688,11 @@ function updateWorkLog(payload) {
 
 // 3.7 WORK LOG APPROVAL WORKFLOW FUNCTION
 function updateApprovalStatus(workLogId, newStatus) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1078,6 +1083,11 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
 
 // 5. UPDATE PAYROLL STATUS TO PAID
 function markPayrollPaid(payload) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
   var employeeId = payload.employeeId;
   var startDateStr = payload.startDate;
   var endDateStr = payload.endDate;
@@ -1245,6 +1255,11 @@ function generateInvoiceReport(propertyId) {
 
 // 7. MARK PROPERTY INVOICE AS BILLED
 function markPropertyBilled(propertyId) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1439,6 +1454,11 @@ function addLease(payload) {
 
 // 10. RECORD RENT LEDGER ENTRY (CHARGE OR PAYMENT)
 function recordLedgerEntry(payload) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
