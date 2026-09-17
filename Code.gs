@@ -2,6 +2,14 @@
 // We extract JUST the ID from the URL: 1bELSUI7xnIyqNxUPMOFTU8uRc9sGsIhkEre6LkVenmI
 const SHEET_ID = '1bELSUI7xnIyqNxUPMOFTU8uRc9sGsIhkEre6LkVenmI'; 
 
+let _cachedSpreadsheet = null;
+function getSpreadsheet() {
+  if (!_cachedSpreadsheet) {
+    _cachedSpreadsheet = SpreadsheetApp.openById(SHEET_ID);
+  }
+  return _cachedSpreadsheet;
+}
+
 // 1. SERVE THE WEB APP
 // This is the required function that runs when someone visits your web app URL.
 function doGet(e) {
@@ -25,7 +33,7 @@ function include(filename) {
 function getUserRole() {
   // Use both Active and Effective user methods to guarantee we capture an email
   var userEmail = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || 'Developer';
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = getSpreadsheet();
   var empSheet = ss.getSheetByName('dim_Employees');
   
   var userInfo = {
@@ -66,7 +74,7 @@ function getUserRole() {
 // 2.5 FETCH DYNAMIC DROPDOWNS
 // This pulls live data from your "Properties" and "Tasks" sheets for the autocomplete boxes.
 function getDropdownData() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = getSpreadsheet();
   
   var propSheet = ss.getSheetByName('Properties');
   var taskSheet = ss.getSheetByName('Tasks');
@@ -135,7 +143,7 @@ function submitWorkLog(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     
     // Generate a unique ID for this specific log entry
     var workLogId = Utilities.getUuid();
@@ -220,7 +228,7 @@ function submitWorkLog(payload) {
 
 function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     if (managementFeePercent === undefined) managementFeePercent = 8.0;
 
     // Determine start and end dates from monthYear ("YYYY-MM")
@@ -323,7 +331,7 @@ function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
 
 function generateSecurityDepositSettlement(leaseId) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     // 1. Get Lease Information
     var leaseSheet = ss.getSheetByName('fact_Leases');
@@ -561,7 +569,7 @@ function exportSecurityDepositSettlementPDF(leaseId) {
 // 3.5 GET EMPLOYEE WORK LOGS & DAILY TOTALS
 function getEmployeeWorkLogs() {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var activeUser = getUserRole();
     var employeeId = activeUser.employeeId || "EMP-001";
 
@@ -635,7 +643,7 @@ function updateWorkLog(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000); // Wait up to 10 seconds for other processes to finish
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
@@ -696,7 +704,7 @@ function updateApprovalStatus(workLogId, newStatus) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
@@ -738,7 +746,7 @@ function updateChargeAmount(workLogId, amount) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
@@ -794,7 +802,7 @@ function updateChargeAmount(workLogId, amount) {
 // Fetches records from fact_Work_Logs, dim_Employees, and fact_Material_Expenses with optional start/end date filtering.
 function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     
     var startDate = parseLocalDate(startDateStr, false);
     var endDate = parseLocalDate(endDateStr, true);
@@ -1101,7 +1109,7 @@ function markPayrollPaid(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
 
@@ -1180,7 +1188,7 @@ function markPayrollPaid(payload) {
 // 5.5. GET PAYROLL HISTORY
 function getPayrollHistory() {
     try {
-        var ss = SpreadsheetApp.openById(SHEET_ID);
+        var ss = getSpreadsheet();
         var historySheet = ss.getSheetByName('fact_Payroll_History');
 
         if (!historySheet) {
@@ -1263,7 +1271,7 @@ function markPropertyBilled(propertyId) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     
     if (laborSheet && laborSheet.getLastRow() > 1) {
@@ -1408,7 +1416,7 @@ function addLease(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     var leaseSheet = ss.getSheetByName('fact_Leases');
     if (!leaseSheet) throw new Error("Could not find sheet: fact_Leases");
@@ -1462,7 +1470,7 @@ function recordLedgerEntry(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
     if (!ledgerSheet) throw new Error("Could not find sheet: fact_Rent_Ledger");
@@ -1494,7 +1502,7 @@ function recordLedgerEntry(payload) {
 // 11. FETCH LEASES AND THEIR TENANTS (For UI Dropdowns)
 function getLeasesAndTenants() {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     var leaseSheet = ss.getSheetByName('fact_Leases');
     var tenantSheet = ss.getSheetByName('dim_Tenants');
@@ -1539,7 +1547,7 @@ function getLeasesAndTenants() {
 // 12. CALCULATE OUTSTANDING BALANCE FOR A LEASE
 function calculateLeaseBalance(leaseId) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     var leaseSheet = ss.getSheetByName('fact_Leases');
     if (!leaseSheet) throw new Error("Could not find sheet: fact_Leases");
@@ -1641,7 +1649,7 @@ function archiveOldData() {
   try {
     lock.waitLock(30000); // 30 seconds
 
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     // 1. Calculate the cutoff date (3 months ago)
     var cutoffDate = new Date();
@@ -1747,7 +1755,7 @@ function archiveOldData() {
  * Automatically creates all required database sheets, header rows, and initial default dropdown values.
  */
 function setupDatabase() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var ss = getSpreadsheet();
   
   var schema = [
     {
@@ -1935,7 +1943,7 @@ function setupDatabase() {
 // 12. BILLING RATES CRUD
 function getBillingRates() {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) return [];
 
@@ -1961,7 +1969,7 @@ function getBillingRates() {
 
 function addBillingRate(payload) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
 
@@ -1982,7 +1990,7 @@ function addBillingRate(payload) {
 
 function updateBillingRate(payload) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet not found");
 
@@ -2011,7 +2019,7 @@ function updateBillingRate(payload) {
 
 function deleteBillingRate(rateId) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet not found");
 
@@ -2034,7 +2042,7 @@ function deleteBillingRate(rateId) {
 // 13. GET EXECUTIVE DASHBOARD DATA
 function getExecutiveDashboardData(startDateStr, endDateStr) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
 
     var startDate = startDateStr ? parseLocalDate(startDateStr, false) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     var endDate = endDateStr ? parseLocalDate(endDateStr, true) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
@@ -2324,7 +2332,7 @@ function markPropertyPaid(propertyId) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
 
     if (laborSheet && laborSheet.getLastRow() > 1) {
@@ -2362,7 +2370,7 @@ function markPropertyPaid(propertyId) {
 // 17. GET RENT ROLL DATA FOR RENT TRACKING
 function getRentRollData(year) {
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var propSheet = ss.getSheetByName('Properties');
     var leaseSheet = ss.getSheetByName('fact_Leases');
     var tenantSheet = ss.getSheetByName('dim_Tenants');
@@ -2470,7 +2478,7 @@ function _isAdminOrOwner() {
 function getProperties() {
   if (!_isAdminOrOwner()) return [];
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) return [];
     var lastRow = sheet.getLastRow();
@@ -2487,7 +2495,7 @@ function getProperties() {
 function addProperty(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
     sheet.appendRow([payload.propertyName, payload.ownerCompany || "", payload.address || ""]);
@@ -2500,7 +2508,7 @@ function addProperty(payload) {
 function updateProperty(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2521,7 +2529,7 @@ function updateProperty(payload) {
 function deleteProperty(propertyName) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2543,7 +2551,7 @@ function deleteProperty(propertyName) {
 function getEmployees() {
   if (!_isAdminOrOwner()) return [];
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) return [];
     var lastRow = sheet.getLastRow();
@@ -2568,7 +2576,7 @@ function getEmployees() {
 function addEmployee(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
     var newId = payload.employeeId || ("EMP-" + Utilities.getUuid().substring(0, 5).toUpperCase());
@@ -2590,7 +2598,7 @@ function addEmployee(payload) {
 function updateEmployee(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2619,7 +2627,7 @@ function updateEmployee(payload) {
 function deleteEmployee(employeeId) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2641,7 +2649,7 @@ function deleteEmployee(employeeId) {
 function getTasks() {
   if (!_isAdminOrOwner()) return [];
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) return [];
     var lastRow = sheet.getLastRow();
@@ -2658,7 +2666,7 @@ function getTasks() {
 function addTask(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
     sheet.appendRow([payload.taskName]);
@@ -2671,7 +2679,7 @@ function addTask(payload) {
 function updateTask(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2692,7 +2700,7 @@ function updateTask(payload) {
 function deleteTask(taskName) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
     var lastRow = sheet.getLastRow();
@@ -2718,7 +2726,7 @@ function deleteTask(taskName) {
 function addBillingRatesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
 
@@ -2750,7 +2758,7 @@ function addBillingRatesBulk(payloads) {
 function addPropertiesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
 
@@ -2778,7 +2786,7 @@ function addPropertiesBulk(payloads) {
 function addEmployeesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
 
@@ -2811,7 +2819,7 @@ function addEmployeesBulk(payloads) {
 function addTasksBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
-    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Task_Categories');
     if (!sheet) throw new Error("dim_Task_Categories sheet not found");
 
