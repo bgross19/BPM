@@ -787,8 +787,8 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     
-    var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : null;
-    var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : null;
+    var startDate = parseLocalDate(startDateStr, false);
+    var endDate = parseLocalDate(endDateStr, true);
 
     var cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - 3);
@@ -1081,8 +1081,8 @@ function markPayrollPaid(payload) {
   var amount = payload.amount;
   var employeeName = payload.employeeName || "";
 
-  var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : null;
-  var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : null;
+  var startDate = parseLocalDate(startDateStr, false);
+  var endDate = parseLocalDate(endDateStr, true);
 
   var lock = LockService.getScriptLock();
   try {
@@ -1527,7 +1527,7 @@ function calculateLeaseBalance(leaseId) {
     for (var i = 0; i < leaseData.length; i++) {
       if (leaseData[i][0] === leaseId) {
         lease = {
-          startDate: new Date(leaseData[i][2]),
+          startDate: parseLocalDate(leaseData[i][2], false),
           monthlyRent: parseFloat(leaseData[i][4]) || 0
         };
         break;
@@ -2012,8 +2012,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
 
-    var startDate = startDateStr ? new Date(startDateStr + 'T00:00:00') : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    var endDate = endDateStr ? new Date(endDateStr + 'T23:59:59') : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+    var startDate = startDateStr ? parseLocalDate(startDateStr, false) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    var endDate = endDateStr ? parseLocalDate(endDateStr, true) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
     var cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - 3);
@@ -2810,4 +2810,40 @@ function addTasksBulk(payloads) {
   } catch (error) {
     return { success: false, error: error.message };
   }
+}
+
+// HELPER: Robust Local Date Parsing
+// Avoids UTC shift issues by constructing dates explicitly in the script's timezone.
+function parseLocalDate(dateString, isEndOfDay) {
+  if (!dateString) return null;
+  // If it's already a Date object, return it or adjust its time.
+  if (dateString instanceof Date || Object.prototype.toString.call(dateString) === '[object Date]') {
+    if (isEndOfDay) {
+        return new Date(dateString.getFullYear(), dateString.getMonth(), dateString.getDate(), 23, 59, 59);
+    }
+    return new Date(dateString.getFullYear(), dateString.getMonth(), dateString.getDate());
+  }
+
+  var str = dateString.toString();
+  if (str.indexOf('T') !== -1) {
+     str = str.split('T')[0];
+  }
+
+  var parts = str.split('-');
+  if (parts.length === 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      if (isEndOfDay) {
+        return new Date(year, month, day, 23, 59, 59);
+      }
+      return new Date(year, month, day);
+  }
+
+  // Fallback if format is unrecognized
+  var fallbackDate = new Date(dateString);
+  if (isEndOfDay && fallbackDate && !isNaN(fallbackDate.getTime())) {
+     fallbackDate.setHours(23, 59, 59, 999);
+  }
+  return fallbackDate;
 }
