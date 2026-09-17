@@ -132,7 +132,9 @@ function getOrCreateReceiptsFolder() {
 // 3. SUBMIT WORK LOG TO SHEETS
 // This is called from the HTML file via google.script.run.submitWorkLog(payload)
 function submitWorkLog(payload) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.openById(SHEET_ID);
     
     // Generate a unique ID for this specific log entry
@@ -209,6 +211,8 @@ function submitWorkLog(payload) {
     
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
