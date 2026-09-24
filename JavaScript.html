@@ -53,7 +53,7 @@
                 document.getElementById('user-role-display').innerText = displayRole;
                 document.getElementById('user-avatar').innerText = displayName.charAt(0).toUpperCase();
                 
-                switchRole(userInfo ? userInfo.role : 'employee');
+                applyUserPermissions(userInfo ? userInfo.role : 'employee');
             })
             .withFailureHandler(err => {
                 console.error("User Role API Error:", err);
@@ -274,9 +274,6 @@
         const ledgerLeaseSelect = document.getElementById('ledger-lease-select');
         if (ledgerLeaseSelect) ledgerLeaseSelect.addEventListener('change', updateTenantDropdownAndBalance);
 
-        const roleSimulator = document.getElementById('role-simulator');
-        if (roleSimulator) roleSimulator.addEventListener('change', (e) => switchRole(e.target.value));
-
         // Sub tabs
         const tabRentTrackingSub = document.getElementById('tab-rent-tracking-sub');
         if (tabRentTrackingSub) tabRentTrackingSub.addEventListener('click', () => switchRentalSubTab('rent-tracking-sub'));
@@ -333,7 +330,7 @@
         validTasks.forEach(task => taskList.insertAdjacentHTML('beforeend', `<option value="${task}">`));
     }
 
-    function switchRole(role) {
+    function applyUserPermissions(role) {
         currentRole = role;
         const dashTab = document.getElementById('tab-dashboard-view');
         if (role === 'admin' || role === 'owner') {
