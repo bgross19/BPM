@@ -106,8 +106,23 @@ function getDropdownData() {
     // Fallback default list if the 'Tasks' sheet hasn't been created yet
     tasks = ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"];
   }
+  // Try to load employees (Assuming ID is Column A, Name is Column B, starting row 2)
+  var employees = [];
+  var empSheet = ss.getSheetByName('dim_Employees');
+  if (empSheet) {
+    var lastEmpRow = empSheet.getLastRow();
+    if (lastEmpRow > 1) {
+      var empData = empSheet.getRange(2, 1, lastEmpRow - 1, 2).getValues();
+      employees = empData.map(function(row) {
+        return { id: row[0], name: row[1] };
+      }).filter(function(emp) { return emp.id; });
+    }
+  } else {
+    // Fallback default list if the 'dim_Employees' sheet hasn't been created yet
+    employees = [{ id: 'EMP01', name: 'Admin' }];
+  }
   
-  return { properties: properties, tasks: tasks };
+  return { properties: properties, tasks: tasks, employees: employees };
 }
 
 // Helper to get or create Google Drive folder for receipts
@@ -509,6 +524,13 @@ function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
     var report = generateSecurityDepositSettlement(leaseId);
     if (!report.success) throw new Error(report.error);
     var st = report.settlement;
+    
+    var waived = parseFloat(waivedLateFees) || 0;
+    if (waived > st.lateFeesIncurred) {
+        waived = st.lateFeesIncurred;
+    }
+    var netLateFees = st.lateFeesIncurred - waived;
+    var finalNetRefund = st.securityDeposit - st.unpaidRent - netLateFees - st.totalDamages;
 
     var waived = parseFloat(waivedLateFees) || 0;
     if (waived > st.lateFeesIncurred) {
@@ -717,6 +739,52 @@ function updateWorkLog(payload) {
 }
 
 // 3.7 WORK LOG APPROVAL WORKFLOW FUNCTION
+function bulkUpdateApprovalStatus(workLogIds, newStatus) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getSpreadsheet();
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
+
+    var lastRow = laborSheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No work logs found.");
+
+    var range = laborSheet.getRange(2, 1, lastRow - 1, 9);
+    var values = range.getValues();
+
+    var idsToUpdate = {};
+    for (var i = 0; i < workLogIds.length; i++) {
+        idsToUpdate[workLogIds[i]] = true;
+    }
+
+    var updatedCount = 0;
+    for (var i = 0; i < values.length; i++) {
+      var id = (values[i][0] || '').toString().trim();
+      if (idsToUpdate[id]) {
+         values[i][8] = newStatus;
+         updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+       range.setValues(values);
+       return { success: true, message: "Successfully updated " + updatedCount + " logs to " + newStatus };
+    } else {
+       throw new Error("No matching work log entries found.");
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function updateApprovalStatus(workLogId, newStatus) {
   var roleCheck = getUserRole();
   if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {

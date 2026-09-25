@@ -6,6 +6,9 @@
     let bypassPropertyWarning = false;
     let activeInvoiceProperty = null;
     let userPunchesCache = [];
+    let currentAdminWorkLogs = [];
+    let currentSortCol = '';
+    let sortAscending = true;
 
     function initializeApp() {
         const logDateInput = document.getElementById('log-date');
@@ -213,6 +216,12 @@
         const btnRefreshApprovals = document.getElementById('btn-refresh-approvals');
         if (btnRefreshApprovals) btnRefreshApprovals.addEventListener('click', loadAdminDashboardData);
 
+        const selectAllApprovals = document.getElementById('select-all-approvals');
+        if (selectAllApprovals) selectAllApprovals.addEventListener('change', toggleAllApprovalCheckboxes);
+
+        const btnApproveAll = document.getElementById('btn-approve-all');
+        if (btnApproveAll) btnApproveAll.addEventListener('click', approveSelectedLogs);
+
         const btnAddTenant = document.getElementById('btn-add-tenant');
         if (btnAddTenant) btnAddTenant.addEventListener('click', addTenantRow);
 
@@ -320,14 +329,50 @@
     function populateDatalists(data) {
         validProperties = data.properties || [];
         validTasks = data.tasks || [];
+        const validEmployees = data.employees || [];
 
         const propList = document.getElementById('property-list');
-        propList.innerHTML = '';
-        validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+        if (propList) {
+            propList.innerHTML = '';
+            validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+        }
 
-        const taskList = document.getElementById('task-list');
-        taskList.innerHTML = '';
-        validTasks.forEach(task => taskList.insertAdjacentHTML('beforeend', `<option value="${task}">`));
+        // Populate Tasks dropdowns
+        const taskDropdowns = [
+            document.getElementById('log-task'),
+            document.getElementById('edit-log-task'),
+            document.getElementById('rate-task-id')
+        ];
+
+        taskDropdowns.forEach(dropdown => {
+            if (!dropdown) return;
+            dropdown.innerHTML = '<option value="">-- Select Task --</option>';
+            validTasks.forEach(task => dropdown.insertAdjacentHTML('beforeend', `<option value="${task}">${task}</option>`));
+
+            if (dropdown.id === 'log-task' || dropdown.id === 'edit-log-task') {
+                dropdown.insertAdjacentHTML('beforeend', `<option value="ADD_NEW_TASK">Add New Task...</option>`);
+
+                // Clone and replace to prevent duplicate listeners
+                const newDropdown = dropdown.cloneNode(true);
+                dropdown.parentNode.replaceChild(newDropdown, dropdown);
+
+                newDropdown.addEventListener('change', function(e) {
+                    if (e.target.value === 'ADD_NEW_TASK') {
+                        e.target.value = "";
+                        openTaskModal();
+                    }
+                });
+            }
+        });
+
+        // Populate Employee dropdown
+        const empDropdown = document.getElementById('rate-employee-id');
+        if (empDropdown) {
+            empDropdown.innerHTML = '<option value="">-- Select Employee --</option><option value="DEFAULT">Default (All Employees)</option>';
+            validEmployees.forEach(emp => {
+                empDropdown.insertAdjacentHTML('beforeend', `<option value="${emp.id}">${emp.name} (${emp.id})</option>`);
+            });
+        }
     }
 
     function applyUserPermissions(role) {
@@ -645,6 +690,23 @@
         }
     }
 
+    function openEditAdminModal(workLogId) {
+        const punch = currentAdminWorkLogs.find(p => p.workLogId === workLogId);
+        if (!punch) return;
+
+        document.getElementById('edit-work-log-id').value = punch.workLogId;
+        // Parse date carefully for date picker (assuming YYYY-MM-DD from server)
+        document.getElementById('edit-log-date').value = punch.dateCompleted;
+        document.getElementById('edit-log-property').value = punch.propertyId;
+        document.getElementById('edit-log-task').value = punch.taskId;
+        document.getElementById('edit-log-hours').value = punch.hoursWorked;
+        document.getElementById('edit-log-notes').value = punch.workNotes;
+
+        const modal = document.getElementById('edit-punch-modal');
+        modal.classList.remove('hidden');
+        setTimeout(() => { modal.classList.remove('opacity-0'); document.getElementById('edit-modal-content').classList.remove('scale-95'); }, 10);
+    }
+
     function openEditModal(workLogId) {
         const punch = userPunchesCache.find(p => p.workLogId === workLogId);
         if (!punch) return;
@@ -688,7 +750,15 @@
             .withSuccessHandler(function(res) {
                 btn.innerText = originalBtnText;
                 btn.disabled = false;
-                if (res.success) { showToast('Success', 'Punch log updated successfully.', 'success'); closeEditPunchModal(); loadEmployeeHistory(); }
+                if (res.success) {
+                    showToast('Success', 'Punch log updated successfully.', 'success');
+                    closeEditPunchModal();
+                    if (document.getElementById('history-view') && !document.getElementById('history-view').classList.contains('hidden')) {
+                        loadEmployeeHistory();
+                    } else if (document.getElementById('billing-view') && !document.getElementById('billing-view').classList.contains('hidden')) {
+                        loadAdminDashboardData();
+                    }
+                }
                 else showToast('Error', res.error, 'error');
             })
             .withFailureHandler(function(err) {
@@ -796,12 +866,46 @@
         document.getElementById('stat-materials-amount').innerText = '$' + (m.unbilledMaterialsCost || 0).toFixed(2);
         document.getElementById('stat-unbilled-total').innerText = '$' + (m.totalUnbilledInvoiceAmount || 0).toFixed(2);
 
+        currentAdminWorkLogs = res.workLogs || [];
+        renderWorkLogsTable();
+    }
+
+    function sortAdminWorkLogs(col) {
+        if (currentSortCol === col) {
+            sortAscending = !sortAscending;
+        } else {
+            currentSortCol = col;
+            sortAscending = true;
+        }
+
+        currentAdminWorkLogs.sort((a, b) => {
+            let valA = a[col];
+            let valB = b[col];
+
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+
+            if (valA < valB) return sortAscending ? -1 : 1;
+            if (valA > valB) return sortAscending ? 1 : -1;
+            return 0;
+        });
+
+        renderWorkLogsTable();
+    }
+
+    function renderWorkLogsTable() {
         const approvalTbody = document.getElementById('approval-tbody');
         approvalTbody.innerHTML = '';
-        if(!res.workLogs || res.workLogs.length === 0) {
-            approvalTbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-gray-400">No work logs found for selected filters.</td></tr>';
+
+        // Reset header checkboxes and buttons
+        const selectAllCheckbox = document.getElementById('select-all-approvals');
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        toggleApproveAllBtn();
+
+        if(!currentAdminWorkLogs || currentAdminWorkLogs.length === 0) {
+            approvalTbody.innerHTML = '<tr><td colspan="10" class="py-6 text-center text-gray-400">No work logs found for selected filters.</td></tr>';
         } else {
-            res.workLogs.forEach(log => {
+            currentAdminWorkLogs.forEach(log => {
                 const statusLower = log.payrollStatus.toLowerCase();
                 let badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                 if(statusLower === 'approved') badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
@@ -809,11 +913,15 @@
                 if(statusLower === 'rejected') badgeClass = 'bg-red-100 text-red-700 border-red-200';
 
                 const isPaid = statusLower === 'paid';
+                const isApprovedOrPaid = statusLower === 'approved' || statusLower === 'paid';
                 const amountVal = log.billableAmount !== undefined ? log.billableAmount.toFixed(2) : (log.grossPay || 0).toFixed(2);
                 const originalAmount = log.originalBillableAmount !== undefined ? log.originalBillableAmount.toFixed(2) : (log.grossPay || 0).toFixed(2);
 
                 approvalTbody.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-gray-50 border-b">
+                        <td class="py-3 px-4 text-center">
+                            <input type="checkbox" class="approval-row-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" data-id="${log.workLogId}" ${isApprovedOrPaid ? 'disabled' : ''} onchange="toggleApproveAllBtn()">
+                        </td>
                         <td class="py-3 px-4 font-medium">${log.dateCompleted}</td>
                         <td class="py-3 px-4 font-medium text-gray-900">${log.employeeName}</td>
                         <td class="py-3 px-4"><span class="font-semibold text-gray-800">${log.propertyId}</span> <span class="text-gray-400">&bull; ${log.taskId}</span></td>
@@ -830,8 +938,9 @@
                         <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${log.payrollStatus}</span></td>
                         <td class="py-3 px-4 text-right">
                             <div class="flex justify-end gap-1">
-                                <button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isPaid || statusLower === 'approved' ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>
-                                <button onclick="setApprovalStatus('${log.workLogId}', 'Rejected')" ${isPaid || statusLower === 'rejected' ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
+                                <button onclick="openEditAdminModal('${log.workLogId}')" ${isPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
+                                <button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>
+                                <button onclick="setApprovalStatus('${log.workLogId}', 'Rejected')" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
                             </div>
                         </td>
                     </tr>
@@ -1012,6 +1121,49 @@
             })
             .withFailureHandler(err => showToast("Error", err.message, "error"))
             .updateChargeAmount(workLogId, '');
+    }
+
+    function toggleAllApprovalCheckboxes(e) {
+        const isChecked = e.target.checked;
+        const checkboxes = document.querySelectorAll('.approval-row-checkbox:not([disabled])');
+        checkboxes.forEach(cb => cb.checked = isChecked);
+        toggleApproveAllBtn();
+    }
+
+    function toggleApproveAllBtn() {
+        const checkboxes = document.querySelectorAll('.approval-row-checkbox:checked');
+        const btn = document.getElementById('btn-approve-all');
+        if (checkboxes.length > 0) {
+            btn.classList.remove('hidden');
+        } else {
+            btn.classList.add('hidden');
+        }
+    }
+
+    function approveSelectedLogs() {
+        const checkboxes = document.querySelectorAll('.approval-row-checkbox:checked');
+        const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+
+        if (ids.length === 0) return;
+
+        const btn = document.getElementById('btn-approve-all');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Approving...';
+        btn.disabled = true;
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                if(res.success) { showToast('Updated', res.message, 'success'); loadAdminDashboardData(); }
+                else showToast('Error', res.error, 'error');
+            })
+            .withFailureHandler(err => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showToast("Error", err.message, "error");
+            })
+            .bulkUpdateApprovalStatus(ids, 'Approved');
     }
 
     function setApprovalStatus(workLogId, status) {
@@ -1472,13 +1624,11 @@
     function updateSDFinancials() {
         if (!currentSDSettlementData) return;
         const st = currentSDSettlementData;
-
         let waived = parseFloat(document.getElementById('sd-out-late-waived').value) || 0;
         if (waived > st.lateFeesIncurred) {
             waived = st.lateFeesIncurred;
             document.getElementById('sd-out-late-waived').value = waived.toFixed(2);
         }
-
         const netLateFee = st.lateFeesIncurred - waived;
         const netRefund = st.securityDeposit - st.unpaidRent - netLateFee - st.totalDamages;
 
@@ -2006,13 +2156,13 @@
         if (payload.oldTaskName) {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
-                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Task</span>'; showToast("Error", err.message, "error"); }).updateTask(payload);
         } else {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
-                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Task</span>'; showToast("Error", err.message, "error"); }).addTask(payload);
         }
@@ -2021,7 +2171,7 @@
     function deleteTask(name) {
         if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
             google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteTask(name);
         }

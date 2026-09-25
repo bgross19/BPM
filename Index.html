@@ -85,8 +85,7 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Task Category <span class="text-red-500">*</span></label>
-                                <input type="text" id="log-task" list="task-list" autocomplete="off" placeholder="Type task..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white">
-                                <datalist id="task-list"></datalist>
+                                <select id="log-task" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"><option value="">-- Select Task --</option></select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Hours <span class="text-red-500">*</span></label>
@@ -723,28 +722,34 @@
                             <h2 class="font-semibold text-gray-800"><i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Work Log Approval Center</h2>
                             <p class="text-xs text-gray-500">Review, approve, or reject logged time entries</p>
                         </div>
-                        <button id="btn-refresh-approvals" class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium shadow-sm transition-colors">
-                            <i class="fas fa-sync-alt mr-1"></i> Refresh
-                        </button>
+                        <div class="flex gap-2">
+                            <button id="btn-approve-all" class="hidden text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-1">
+                                <i class="fas fa-check-double"></i> Approve Selected
+                            </button>
+                            <button id="btn-refresh-approvals" class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 font-medium shadow-sm transition-colors">
+                                <i class="fas fa-sync-alt mr-1"></i> Refresh
+                            </button>
+                        </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs text-gray-600">
                             <thead class="bg-gray-100 text-gray-700 uppercase">
                                 <tr>
-                                    <th class="py-3 px-4">Date</th>
-                                    <th class="py-3 px-4">Worker</th>
-                                    <th class="py-3 px-4">Property / Task</th>
-                                    <th class="py-3 px-4">Hours</th>
+                                    <th class="py-3 px-4 w-10 text-center"><input type="checkbox" id="select-all-approvals" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('dateCompleted')">Date <i class="fas fa-sort text-gray-400 ml-1"></i></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('employeeName')">Worker <i class="fas fa-sort text-gray-400 ml-1"></i></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('propertyId')">Property / Task <i class="fas fa-sort text-gray-400 ml-1"></i></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('hoursWorked')">Hours <i class="fas fa-sort text-gray-400 ml-1"></i></th>
                                     <th class="py-3 px-4">Notes</th>
-                                    <th class="py-3 px-4">Billable Amount</th>
-                                    <th class="py-3 px-4">Charge Target</th>
-                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('billableAmount')">Billable Amount <i class="fas fa-sort text-gray-400 ml-1"></i></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('chargeTarget')">Charge Target <i class="fas fa-sort text-gray-400 ml-1"></i></th>
+                                    <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortAdminWorkLogs('payrollStatus')">Status <i class="fas fa-sort text-gray-400 ml-1"></i></th>
                                     <th class="py-3 px-4 text-right">Approval Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="approval-tbody" class="divide-y divide-gray-200">
                                 <tr>
-                                    <td colspan="9" class="py-8 text-center text-gray-400">Loading work logs for approval...</td>
+                                    <td colspan="10" class="py-8 text-center text-gray-400">Loading work logs for approval...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -788,7 +793,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
-                        <input type="text" id="edit-log-task" list="task-list" autocomplete="off" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select id="edit-log-task" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"><option value="">-- Select Task --</option></select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Hours</label>
@@ -1085,12 +1090,12 @@
                 <input type="hidden" id="rate-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
-                    <input type="text" id="rate-task-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <select id="rate-task-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"><option value="">-- Select Task --</option></select>
                     <p class="text-xs text-gray-500 mt-1">Use exact Task name</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                    <input type="text" id="rate-employee-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <select id="rate-employee-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"><option value="">-- Select Employee --</option></select>
                     <p class="text-xs text-gray-500 mt-1">Use exactly 'DEFAULT' to set a fallback rate for all employees on this task.</p>
                 </div>
                 <div>
