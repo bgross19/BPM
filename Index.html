@@ -656,6 +656,30 @@
 
             <!-- ADMIN VIEW: BILLING TAB -->
             <div id="billing-view" class="hidden space-y-6">
+                <!-- METRIC CARDS (Billing) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Unbilled Materials</p>
+                            <h3 class="text-xl font-bold text-orange-600 mt-1" id="stat-materials-amount">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Purchased supplies</p>
+                        </div>
+                        <div class="h-9 w-9 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                            <i class="fas fa-receipt"></i>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 font-medium">Unbilled Invoices</p>
+                            <h3 class="text-xl font-bold text-blue-600 mt-1" id="stat-unbilled-total">$0.00</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Labor + Materials</p>
+                        </div>
+                        <div class="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- DATE RANGE & PAY PERIOD FILTER BAR (Billing) -->
                 <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                     <div class="flex flex-wrap justify-between items-center gap-2 border-b pb-3">
@@ -687,30 +711,6 @@
                                 <option value="Paid">Paid</option>
                                 <option value="Rejected">Rejected</option>
                             </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- METRIC CARDS (Billing) -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p class="text-xs text-gray-500 font-medium">Unbilled Materials</p>
-                            <h3 class="text-xl font-bold text-orange-600 mt-1" id="stat-materials-amount">$0.00</h3>
-                            <p class="text-xs text-gray-400 mt-0.5">Purchased supplies</p>
-                        </div>
-                        <div class="h-9 w-9 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
-                            <i class="fas fa-receipt"></i>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p class="text-xs text-gray-500 font-medium">Unbilled Invoices</p>
-                            <h3 class="text-xl font-bold text-blue-600 mt-1" id="stat-unbilled-total">$0.00</h3>
-                            <p class="text-xs text-gray-400 mt-0.5">Labor + Materials</p>
-                        </div>
-                        <div class="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                            <i class="fas fa-file-invoice"></i>
                         </div>
                     </div>
                 </div>
