@@ -252,6 +252,18 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Security Deposit ($)</label>
                                 <input type="number" id="lease-security-deposit" step="0.01" min="0" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Management Fee (%)</label>
+                                <input type="number" id="lease-management-fee" step="0.1" min="0" value="8" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Late Fee per Day ($)</label>
+                                <input type="number" id="lease-late-fee" step="0.01" min="0" value="5" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Grace Period (Days)</label>
+                                <input type="number" id="lease-grace-period" step="1" min="0" value="5" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
                         </div>
 
                         <!-- Add Tenants Section -->
@@ -382,7 +394,7 @@
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm space-y-3">
                                 <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Rent Collected:</span><span id="os-out-rent" class="font-medium">$0.00</span></div>
-                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Management Fee (<span id="os-out-fee-rate"></span>%):</span><span id="os-out-fee" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Management Fee:</span><span id="os-out-fee" class="font-medium text-red-600">-$0.00</span></div>
                                 <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Maintenance Billed:</span><span id="os-out-maint" class="font-medium text-red-600">-$0.00</span></div>
                                 <div class="flex justify-between pt-2"><span class="font-bold text-gray-900">Net Payout to Owner:</span><span id="os-out-payout" class="font-bold text-green-700 text-lg">$0.00</span></div>
                             </div>
@@ -425,7 +437,16 @@
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm space-y-3">
                                 <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Initial Deposit Held:</span><span id="sd-out-dep" class="font-medium">$0.00</span></div>
-                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Unpaid Rent/Late Fees:</span><span id="sd-out-rent" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Unpaid Rent:</span><span id="sd-out-rent" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Late Fees Incurred:</span><span id="sd-out-late-incurred" class="font-medium text-red-600">-$0.00</span></div>
+                                <div class="flex justify-between items-center border-b pb-2">
+                                    <span class="text-gray-600">Late Fees Waived (Courtesy):</span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-500">$</span>
+                                        <input type="number" id="sd-out-late-waived" value="0" step="0.01" min="0" class="w-20 text-right text-green-600 border border-gray-300 rounded p-1 outline-none text-sm focus:ring-1 focus:ring-purple-500">
+                                    </div>
+                                </div>
+                                <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Net Late Fees Charged:</span><span id="sd-out-late-net" class="font-medium text-red-600">-$0.00</span></div>
                                 <div class="flex justify-between border-b pb-2"><span class="text-gray-600">Total Damages Deducted:</span><span id="sd-out-dmg" class="font-medium text-red-600">-$0.00</span></div>
                                 <div class="flex justify-between pt-2"><span class="font-bold text-gray-900">Net Refund to Tenant:</span><span id="sd-out-refund" class="font-bold text-purple-700 text-lg">$0.00</span></div>
                             </div>
