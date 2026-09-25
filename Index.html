@@ -85,8 +85,7 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Task Category <span class="text-red-500">*</span></label>
-                                <input type="text" id="log-task" list="task-list" autocomplete="off" placeholder="Type task..." required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white">
-                                <datalist id="task-list"></datalist>
+                                <select id="log-task" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"><option value="">-- Select Task --</option></select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Hours <span class="text-red-500">*</span></label>
@@ -788,7 +787,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
-                        <input type="text" id="edit-log-task" list="task-list" autocomplete="off" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select id="edit-log-task" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"><option value="">-- Select Task --</option></select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Hours</label>
@@ -1085,12 +1084,12 @@
                 <input type="hidden" id="rate-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Task Category</label>
-                    <input type="text" id="rate-task-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <select id="rate-task-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"><option value="">-- Select Task --</option></select>
                     <p class="text-xs text-gray-500 mt-1">Use exact Task name</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                    <input type="text" id="rate-employee-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <select id="rate-employee-id" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"><option value="">-- Select Employee --</option></select>
                     <p class="text-xs text-gray-500 mt-1">Use exactly 'DEFAULT' to set a fallback rate for all employees on this task.</p>
                 </div>
                 <div>
