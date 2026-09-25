@@ -320,14 +320,50 @@
     function populateDatalists(data) {
         validProperties = data.properties || [];
         validTasks = data.tasks || [];
+        const validEmployees = data.employees || [];
 
         const propList = document.getElementById('property-list');
-        propList.innerHTML = '';
-        validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+        if (propList) {
+            propList.innerHTML = '';
+            validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+        }
 
-        const taskList = document.getElementById('task-list');
-        taskList.innerHTML = '';
-        validTasks.forEach(task => taskList.insertAdjacentHTML('beforeend', `<option value="${task}">`));
+        // Populate Tasks dropdowns
+        const taskDropdowns = [
+            document.getElementById('log-task'),
+            document.getElementById('edit-log-task'),
+            document.getElementById('rate-task-id')
+        ];
+
+        taskDropdowns.forEach(dropdown => {
+            if (!dropdown) return;
+            dropdown.innerHTML = '<option value="">-- Select Task --</option>';
+            validTasks.forEach(task => dropdown.insertAdjacentHTML('beforeend', `<option value="${task}">${task}</option>`));
+
+            if (dropdown.id === 'log-task' || dropdown.id === 'edit-log-task') {
+                dropdown.insertAdjacentHTML('beforeend', `<option value="ADD_NEW_TASK">Add New Task...</option>`);
+
+                // Clone and replace to prevent duplicate listeners
+                const newDropdown = dropdown.cloneNode(true);
+                dropdown.parentNode.replaceChild(newDropdown, dropdown);
+
+                newDropdown.addEventListener('change', function(e) {
+                    if (e.target.value === 'ADD_NEW_TASK') {
+                        e.target.value = "";
+                        openTaskModal();
+                    }
+                });
+            }
+        });
+
+        // Populate Employee dropdown
+        const empDropdown = document.getElementById('rate-employee-id');
+        if (empDropdown) {
+            empDropdown.innerHTML = '<option value="">-- Select Employee --</option><option value="DEFAULT">Default (All Employees)</option>';
+            validEmployees.forEach(emp => {
+                empDropdown.insertAdjacentHTML('beforeend', `<option value="${emp.id}">${emp.name} (${emp.id})</option>`);
+            });
+        }
     }
 
     function applyUserPermissions(role) {
@@ -2006,13 +2042,13 @@
         if (payload.oldTaskName) {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
-                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Task</span>'; showToast("Error", err.message, "error"); }).updateTask(payload);
         } else {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Task</span>';
-                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { closeTaskModal(); showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Task</span>'; showToast("Error", err.message, "error"); }).addTask(payload);
         }
@@ -2021,7 +2057,7 @@
     function deleteTask(name) {
         if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
             google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadTasks(); } 
+                if (res.success) { showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteTask(name);
         }

@@ -106,8 +106,23 @@ function getDropdownData() {
     // Fallback default list if the 'Tasks' sheet hasn't been created yet
     tasks = ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"];
   }
+  // Try to load employees (Assuming ID is Column A, Name is Column B, starting row 2)
+  var employees = [];
+  var empSheet = ss.getSheetByName('dim_Employees');
+  if (empSheet) {
+    var lastEmpRow = empSheet.getLastRow();
+    if (lastEmpRow > 1) {
+      var empData = empSheet.getRange(2, 1, lastEmpRow - 1, 2).getValues();
+      employees = empData.map(function(row) {
+        return { id: row[0], name: row[1] };
+      }).filter(function(emp) { return emp.id; });
+    }
+  } else {
+    // Fallback default list if the 'dim_Employees' sheet hasn't been created yet
+    employees = [{ id: 'EMP01', name: 'Admin' }];
+  }
   
-  return { properties: properties, tasks: tasks };
+  return { properties: properties, tasks: tasks, employees: employees };
 }
 
 // Helper to get or create Google Drive folder for receipts
