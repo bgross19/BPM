@@ -113,8 +113,8 @@ function getDropdownData() {
     var lastRow = empSheet.getLastRow();
     if (lastRow > 1) {
       var empData = empSheet.getRange(2, 1, lastRow - 1, 2).getValues();
-      employees = empData.map(function(row) {
-        return { id: row[0], name: row[1] };
+      employees = empData.map(function(row) { 
+        return { id: row[0], name: row[1] }; 
       }).filter(function(e) { return e.id; });
     }
   } else {
