@@ -1624,13 +1624,11 @@
     function updateSDFinancials() {
         if (!currentSDSettlementData) return;
         const st = currentSDSettlementData;
-        
         let waived = parseFloat(document.getElementById('sd-out-late-waived').value) || 0;
         if (waived > st.lateFeesIncurred) {
             waived = st.lateFeesIncurred;
             document.getElementById('sd-out-late-waived').value = waived.toFixed(2);
         }
-        
         const netLateFee = st.lateFeesIncurred - waived;
         const netRefund = st.securityDeposit - st.unpaidRent - netLateFee - st.totalDamages;
 
@@ -1653,25 +1651,25 @@
                 if (res.success) {
                     currentSDSettlementData = res.settlement;
                     const st = res.settlement;
-                    
+
                     document.getElementById('sd-out-dep').innerText = `$${st.securityDeposit.toFixed(2)}`;
                     document.getElementById('sd-out-rent').innerText = `-$${st.unpaidRent.toFixed(2)}`;
                     document.getElementById('sd-out-late-incurred').innerText = `-$${st.lateFeesIncurred.toFixed(2)}`;
                     document.getElementById('sd-out-late-waived').value = 0; // Reset waiver
                     document.getElementById('sd-out-dmg').innerText = `-$${st.totalDamages.toFixed(2)}`;
-                    
+
                     updateSDFinancials(); // Will calculate net late fee and net refund
 
                     document.getElementById('sd-display').classList.remove('hidden');
                     document.getElementById('sd-links-container').classList.add('hidden');
-                    
+
                     // Attach event listener to waiver input if not already attached
                     const waiveInput = document.getElementById('sd-out-late-waived');
                     if (!waiveInput.hasAttribute('data-listening')) {
                         waiveInput.addEventListener('input', updateSDFinancials);
                         waiveInput.setAttribute('data-listening', 'true');
                     }
-                    
+
                     showToast('Success', 'Security deposit settlement generated.', 'success');
                 } else showToast('Error', res.error, 'error');
             })

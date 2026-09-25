@@ -532,6 +532,13 @@ function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
     var netLateFees = st.lateFeesIncurred - waived;
     var finalNetRefund = st.securityDeposit - st.unpaidRent - netLateFees - st.totalDamages;
 
+    var waived = parseFloat(waivedLateFees) || 0;
+    if (waived > st.lateFeesIncurred) {
+        waived = st.lateFeesIncurred;
+    }
+    var netLateFees = st.lateFeesIncurred - waived;
+    var finalNetRefund = st.securityDeposit - st.unpaidRent - netLateFees - st.totalDamages;
+
     var docTitle = "Security Deposit Settlement - " + leaseId;
     var doc = DocumentApp.create(docTitle);
     var body = doc.getBody();
