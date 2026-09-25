@@ -732,6 +732,52 @@ function updateWorkLog(payload) {
 }
 
 // 3.7 WORK LOG APPROVAL WORKFLOW FUNCTION
+function bulkUpdateApprovalStatus(workLogIds, newStatus) {
+  var roleCheck = getUserRole();
+  if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
+    return { success: false, error: "Unauthorized access." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getSpreadsheet();
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
+
+    var lastRow = laborSheet.getLastRow();
+    if (lastRow <= 1) throw new Error("No work logs found.");
+
+    var range = laborSheet.getRange(2, 1, lastRow - 1, 9);
+    var values = range.getValues();
+
+    var idsToUpdate = {};
+    for (var i = 0; i < workLogIds.length; i++) {
+        idsToUpdate[workLogIds[i]] = true;
+    }
+
+    var updatedCount = 0;
+    for (var i = 0; i < values.length; i++) {
+      var id = (values[i][0] || '').toString().trim();
+      if (idsToUpdate[id]) {
+         values[i][8] = newStatus;
+         updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+       range.setValues(values);
+       return { success: true, message: "Successfully updated " + updatedCount + " logs to " + newStatus };
+    } else {
+       throw new Error("No matching work log entries found.");
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function updateApprovalStatus(workLogId, newStatus) {
   var roleCheck = getUserRole();
   if (roleCheck.role !== 'admin' && roleCheck.role !== 'owner') {
