@@ -81,6 +81,7 @@ function getDropdownData() {
   
   var properties = [];
   var tasks = [];
+  var employees = [];
   
   // Try to load properties (Assuming names are in Column A, starting row 2)
   if (propSheet) {
@@ -107,7 +108,20 @@ function getDropdownData() {
     tasks = ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"];
   }
   
-  return { properties: properties, tasks: tasks };
+  var empSheet = ss.getSheetByName('dim_Employees');
+  if (empSheet) {
+    var lastRow = empSheet.getLastRow();
+    if (lastRow > 1) {
+      var empData = empSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+      employees = empData.map(function(row) {
+        return { id: row[0], name: row[1] };
+      }).filter(function(e) { return e.id; });
+    }
+  } else {
+    employees = [{id: "EMP-001", name: "John Doe"}, {id: "EMP-002", name: "Jane Smith"}];
+  }
+
+  return { properties: properties, tasks: tasks, employees: employees };
 }
 
 // Helper to get or create Google Drive folder for receipts
