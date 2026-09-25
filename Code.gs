@@ -245,18 +245,22 @@ function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
     // 1. Get Leases for Property
     var leaseSheet = ss.getSheetByName('fact_Leases');
     var propertyLeaseIds = {};
+    var leaseManagementFees = {};
     if (leaseSheet && leaseSheet.getLastRow() > 1) {
-      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 2).getValues();
+      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, leaseSheet.getLastColumn()).getValues();
       for (var i = 0; i < leaseData.length; i++) {
         if (leaseData[i][1] === propertyId) {
           propertyLeaseIds[leaseData[i][0]] = true;
+          var mFee = parseFloat(leaseData[i][7]);
+          leaseManagementFees[leaseData[i][0]] = !isNaN(mFee) ? mFee : managementFeePercent;
         }
       }
     }
 
-    // 2. Total Rent Collected
+    // 2. Total Rent Collected & 3. Management Fee Calculation
     var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
     var totalRentCollected = 0;
+    var managementFee = 0;
     var rentLedgerItems = [];
     if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
       var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
@@ -270,18 +274,18 @@ function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
           var logDate = new Date(l_date);
           if (logDate >= startDate && logDate <= endDate) {
             totalRentCollected += l_payment;
+            var feePercent = leaseManagementFees[l_leaseId] !== undefined ? leaseManagementFees[l_leaseId] : managementFeePercent;
+            managementFee += l_payment * (feePercent / 100);
             rentLedgerItems.push({
               date: Utilities.formatDate(logDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
               amount: l_payment,
-              leaseId: l_leaseId
+              leaseId: l_leaseId,
+              feePercent: feePercent
             });
           }
         }
       }
     }
-
-    // 3. Management Fee
-    var managementFee = totalRentCollected * (managementFeePercent / 100);
 
     // 4. Maintenance Billed to Owner
     var adminData = getAdminPayrollData(startDateStr, endDateStr, 'All');
@@ -357,7 +361,9 @@ function generateSecurityDepositSettlement(leaseId) {
     var balanceData = calculateLeaseBalance(leaseId);
     if (!balanceData.success) throw new Error("Error calculating balance: " + balanceData.error);
 
-    var unpaidRent = Math.max(0, balanceData.balance);
+    var rawUnpaidRent = balanceData.balance - (balanceData.lateFeesIncurred || 0);
+    var unpaidRent = Math.max(0, rawUnpaidRent);
+    var lateFeesIncurred = balanceData.lateFeesIncurred || 0;
 
     // 3. Damages / Maintenance (Target = Security Deposit)
     var extendedEndDate = new Date(lease.endDate);
@@ -389,7 +395,7 @@ function generateSecurityDepositSettlement(leaseId) {
     var totalDamages = totalLaborCost + totalMaterialsCost;
 
     // 4. Net Refund
-    var netRefund = lease.securityDeposit - unpaidRent - totalDamages;
+    var netRefund = lease.securityDeposit - unpaidRent - totalDamages - lateFeesIncurred;
 
     return {
       success: true,
@@ -398,6 +404,7 @@ function generateSecurityDepositSettlement(leaseId) {
         propertyId: lease.propertyId,
         securityDeposit: lease.securityDeposit,
         unpaidRent: unpaidRent,
+        lateFeesIncurred: lateFeesIncurred,
         laborItems: filteredLogs,
         materialItems: filteredMaterials,
         totalDamages: totalDamages,
@@ -447,8 +454,11 @@ function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
 
     var feeHeader = body.appendParagraph("Management Fee");
     feeHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    body.appendParagraph("Rate: " + st.managementFeePercent + "%");
-    body.appendParagraph("Fee Amount: $" + st.managementFeeAmount.toFixed(2));
+    if (st.rentLedgerItems && st.rentLedgerItems.length > 0) {
+      body.appendParagraph("Fee Amount: $" + st.managementFeeAmount.toFixed(2) + " (Calculated per lease)");
+    } else {
+      body.appendParagraph("Fee Amount: $" + st.managementFeeAmount.toFixed(2));
+    }
     body.appendParagraph("");
 
     var maintHeader = body.appendParagraph("Maintenance & Repairs");
@@ -494,11 +504,18 @@ function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
   }
 }
 
-function exportSecurityDepositSettlementPDF(leaseId) {
+function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
   try {
     var report = generateSecurityDepositSettlement(leaseId);
     if (!report.success) throw new Error(report.error);
     var st = report.settlement;
+
+    var waived = parseFloat(waivedLateFees) || 0;
+    if (waived > st.lateFeesIncurred) {
+        waived = st.lateFeesIncurred;
+    }
+    var netLateFees = st.lateFeesIncurred - waived;
+    var finalNetRefund = st.securityDeposit - st.unpaidRent - netLateFees - st.totalDamages;
 
     var docTitle = "Security Deposit Settlement - " + leaseId;
     var doc = DocumentApp.create(docTitle);
@@ -518,9 +535,14 @@ function exportSecurityDepositSettlementPDF(leaseId) {
     body.appendParagraph("Initial Deposit Held: $" + st.securityDeposit.toFixed(2));
     body.appendParagraph("");
 
-    var rentHeader = body.appendParagraph("Unpaid Rent & Fees");
+    var rentHeader = body.appendParagraph("Unpaid Rent & Late Fees");
     rentHeader.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    body.appendParagraph("Total Owed: $" + st.unpaidRent.toFixed(2));
+    body.appendParagraph("Unpaid Rent: $" + st.unpaidRent.toFixed(2));
+    body.appendParagraph("Late Fees Incurred: $" + st.lateFeesIncurred.toFixed(2));
+    if (waived > 0) {
+        body.appendParagraph("Late Fees Waived (Courtesy): -$" + waived.toFixed(2));
+    }
+    body.appendParagraph("Net Late Fees Charged: $" + netLateFees.toFixed(2));
     body.appendParagraph("");
 
     var maintHeader = body.appendParagraph("Damages & Maintenance Deductions");
@@ -542,7 +564,7 @@ function exportSecurityDepositSettlementPDF(leaseId) {
     body.appendParagraph("Total Damages Deducted: $" + st.totalDamages.toFixed(2));
     body.appendParagraph("");
 
-    var refPara = body.appendParagraph("NET REFUND TO TENANT: $" + st.netRefund.toFixed(2));
+    var refPara = body.appendParagraph("NET REFUND TO TENANT: $" + finalNetRefund.toFixed(2));
     refPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
 
     doc.saveAndClose();
@@ -1434,7 +1456,10 @@ function addLease(payload) {
       payload.endDate,
       payload.monthlyRent,
       payload.securityDeposit,
-      "Active"
+      "Active",
+      payload.managementFeePercent !== undefined ? payload.managementFeePercent : 8.0,
+      payload.lateFeePerDay !== undefined ? payload.lateFeePerDay : 5.0,
+      payload.gracePeriodDays !== undefined ? payload.gracePeriodDays : 5
     ]);
 
     // Add tenants
@@ -1511,7 +1536,7 @@ function getLeasesAndTenants() {
     var tenants = [];
 
     if (leaseSheet && leaseSheet.getLastRow() > 1) {
-      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+      var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, leaseSheet.getLastColumn()).getValues();
       leases = leaseData.map(function(row) {
         return {
           leaseId: row[0],
@@ -1520,7 +1545,10 @@ function getLeasesAndTenants() {
           endDate: row[3],
           monthlyRent: row[4],
           securityDeposit: row[5],
-          status: row[6]
+          status: row[6],
+          managementFeePercent: parseFloat(row[7]) || 8.0,
+          lateFeePerDay: parseFloat(row[8]) || 5.0,
+          gracePeriodDays: parseInt(row[9]) || 5
         };
       });
     }
@@ -1867,7 +1895,10 @@ function setupDatabase() {
         'End_Date',
         'Monthly_Rent',
         'Security_Deposit',
-        'Status'
+        'Status',
+        'Management_Fee_Percent',
+        'Late_Fee_Per_Day',
+        'Grace_Period_Days'
       ]
     },
     {

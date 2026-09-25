@@ -1313,6 +1313,9 @@
             endDate: document.getElementById('lease-end-date').value,
             monthlyRent: document.getElementById('lease-monthly-rent').value,
             securityDeposit: document.getElementById('lease-security-deposit').value,
+            managementFeePercent: parseFloat(document.getElementById('lease-management-fee').value) || 8.0,
+            lateFeePerDay: parseFloat(document.getElementById('lease-late-fee').value) || 5.0,
+            gracePeriodDays: parseInt(document.getElementById('lease-grace-period').value) || 5,
             tenants: tenants
         };
 
@@ -1417,7 +1420,6 @@
                 if (res.success) {
                     const st = res.settlement;
                     document.getElementById('os-out-rent').innerText = `$${st.totalRentCollected.toFixed(2)}`;
-                    document.getElementById('os-out-fee-rate').innerText = st.managementFeePercent;
                     document.getElementById('os-out-fee').innerText = `-$${st.managementFeeAmount.toFixed(2)}`;
                     document.getElementById('os-out-maint').innerText = `-$${st.totalMaintenanceBilled.toFixed(2)}`;
                     document.getElementById('os-out-payout').innerText = `$${st.netPayout.toFixed(2)}`;
@@ -1465,6 +1467,25 @@
             .exportOwnerSettlementPDF(propertyId, monthYear, feePercent);
     }
 
+    let currentSDSettlementData = null; // Store fetched SD data to dynamically recalculate
+
+    function updateSDFinancials() {
+        if (!currentSDSettlementData) return;
+        const st = currentSDSettlementData;
+
+        let waived = parseFloat(document.getElementById('sd-out-late-waived').value) || 0;
+        if (waived > st.lateFeesIncurred) {
+            waived = st.lateFeesIncurred;
+            document.getElementById('sd-out-late-waived').value = waived.toFixed(2);
+        }
+
+        const netLateFee = st.lateFeesIncurred - waived;
+        const netRefund = st.securityDeposit - st.unpaidRent - netLateFee - st.totalDamages;
+
+        document.getElementById('sd-out-late-net').innerText = `-$${netLateFee.toFixed(2)}`;
+        document.getElementById('sd-out-refund').innerText = `$${netRefund.toFixed(2)}`;
+    }
+
     function generateSDSettlementUI(e) {
         e.preventDefault();
         const btn = document.getElementById('btn-gen-sd');
@@ -1478,14 +1499,27 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 if (res.success) {
+                    currentSDSettlementData = res.settlement;
                     const st = res.settlement;
+
                     document.getElementById('sd-out-dep').innerText = `$${st.securityDeposit.toFixed(2)}`;
                     document.getElementById('sd-out-rent').innerText = `-$${st.unpaidRent.toFixed(2)}`;
+                    document.getElementById('sd-out-late-incurred').innerText = `-$${st.lateFeesIncurred.toFixed(2)}`;
+                    document.getElementById('sd-out-late-waived').value = 0; // Reset waiver
                     document.getElementById('sd-out-dmg').innerText = `-$${st.totalDamages.toFixed(2)}`;
-                    document.getElementById('sd-out-refund').innerText = `$${st.netRefund.toFixed(2)}`;
+
+                    updateSDFinancials(); // Will calculate net late fee and net refund
 
                     document.getElementById('sd-display').classList.remove('hidden');
                     document.getElementById('sd-links-container').classList.add('hidden');
+
+                    // Attach event listener to waiver input if not already attached
+                    const waiveInput = document.getElementById('sd-out-late-waived');
+                    if (!waiveInput.hasAttribute('data-listening')) {
+                        waiveInput.addEventListener('input', updateSDFinancials);
+                        waiveInput.setAttribute('data-listening', 'true');
+                    }
+
                     showToast('Success', 'Security deposit settlement generated.', 'success');
                 } else showToast('Error', res.error, 'error');
             })
@@ -1499,6 +1533,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin text-red-500"></i> Exporting...';
         btn.disabled = true;
         const leaseId = document.getElementById('sd-lease-select').value;
+        const waivedFees = parseFloat(document.getElementById('sd-out-late-waived').value) || 0;
 
         google.script.run
             .withSuccessHandler(function(res) {
@@ -1521,7 +1556,7 @@
                 } else showToast('Error', res.error, 'error');
             })
             .withFailureHandler(err => { btn.innerHTML = originalText; btn.disabled = false; showToast("Error", err.message, "error"); })
-            .exportSecurityDepositSettlementPDF(leaseId);
+            .exportSecurityDepositSettlementPDF(leaseId, waivedFees);
     }
 
     function closeRentPaymentModal() {
