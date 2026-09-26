@@ -680,7 +680,7 @@
                         </div>
                         <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 pt-2 sm:pt-0">
                             <span class="font-bold text-gray-800 text-sm">${punch.hoursWorked.toFixed(2)} hrs</span>
-                            <button onclick="openEditModal('${punch.workLogId}')" ${isPaid ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center gap-1">
+                            <button onclick="openEditModal('${punch.workLogId}')" ${statusLower === 'approved' || isPaid ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center gap-1">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
                         </div>
@@ -938,8 +938,11 @@
                         <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${log.payrollStatus}</span></td>
                         <td class="py-3 px-4 text-right">
                             <div class="flex justify-end gap-1">
-                                <button onclick="openEditAdminModal('${log.workLogId}')" ${isPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
-                                <button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>
+                                <button onclick="openEditAdminModal('${log.workLogId}')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
+                                ${statusLower === 'approved'
+                                    ? `<button onclick="setApprovalStatus('${log.workLogId}', 'Pending')" class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded text-xs">Unapprove</button>`
+                                    : `<button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>`
+                                }
                                 <button onclick="setApprovalStatus('${log.workLogId}', 'Rejected')" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
                             </div>
                         </td>
