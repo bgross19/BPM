@@ -30,44 +30,56 @@ function include(filename) {
 }
 
 // 2. GET USER ROLE (Passed to frontend on load)
+let _cachedUserRole = null;
 function getUserRole() {
-  // Use both Active and Effective user methods to guarantee we capture an email
-  var userEmail = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || 'Developer';
+  if (_cachedUserRole) {
+    return _cachedUserRole;
+  }
+  // Use both Active and Effective user methods to capture an email
+  var rawEmail = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+  var userEmail = rawEmail.toString().trim();
   var ss = getSpreadsheet();
   var empSheet = ss.getSheetByName('dim_Employees');
   
+  // Default to least-privilege ('employee') unless dim_Employees is not set up yet
+  var hasEmployeeRecords = empSheet && empSheet.getLastRow() > 1;
   var userInfo = {
-    email: userEmail,
-    role: 'admin', // Default to admin so you don't get locked out
-    employeeId: 'EMP-001',
-    name: userEmail // CRITICAL: Ensures the name is NEVER blank!
+    email: userEmail || 'Unknown',
+    role: hasEmployeeRecords ? 'employee' : 'admin',
+    employeeId: hasEmployeeRecords ? 'UNASSIGNED' : 'EMP-001',
+    name: userEmail || 'Guest User',
+    status: 'Active'
   };
   
-  if (empSheet) {
+  if (hasEmployeeRecords && userEmail) {
     var lastRow = empSheet.getLastRow();
-    if (lastRow > 1) {
-      var data = empSheet.getRange(2, 1, lastRow - 1, 7).getValues();
-      for (var i = 0; i < data.length; i++) {
-        var row = data[i];
-        var emailInSheet = (row[2] || '').toString().trim().toLowerCase();
-        
-        if (emailInSheet && emailInSheet === userEmail.toLowerCase()) {
-          userInfo.employeeId = row[0]; // Column A: Employee_ID
-          userInfo.name = row[1] || userEmail;       // Column B: Full_Name
-          var roleInSheet = (row[4] || '').toString().trim().toLowerCase(); // Column E: Role
-          if (roleInSheet.indexOf('owner') > -1 || roleInSheet.indexOf('executive') > -1) {
-              userInfo.role = 'owner';
-          } else if (roleInSheet.indexOf('admin') > -1) {
-              userInfo.role = 'admin';
-          } else {
-              userInfo.role = 'employee';
-          }
-          break;
+    var data = empSheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var emailInSheet = (row[2] || '').toString().trim().toLowerCase();
+      
+      if (emailInSheet && emailInSheet === userEmail.toLowerCase()) {
+        userInfo.employeeId = (row[0] || '').toString().trim() || 'UNASSIGNED'; // Column A: Employee_ID
+        userInfo.name = row[1] || userEmail;                                    // Column B: Full_Name
+        var statusInSheet = (row[6] || 'Active').toString().trim().toLowerCase(); // Column G: Status
+        userInfo.status = statusInSheet === 'inactive' ? 'Inactive' : 'Active';
+
+        var roleInSheet = (row[4] || '').toString().trim().toLowerCase(); // Column E: Role
+        if (userInfo.status === 'Inactive') {
+          userInfo.role = 'inactive';
+        } else if (roleInSheet.indexOf('owner') > -1 || roleInSheet.indexOf('executive') > -1) {
+          userInfo.role = 'owner';
+        } else if (roleInSheet.indexOf('admin') > -1) {
+          userInfo.role = 'admin';
+        } else {
+          userInfo.role = 'employee';
         }
+        break;
       }
     }
   }
   
+  _cachedUserRole = userInfo;
   return userInfo;
 }
 
@@ -106,20 +118,22 @@ function getDropdownData() {
     // Fallback default list if the 'Tasks' sheet hasn't been created yet
     tasks = ["Handyman", "Plumbing", "Painting", "Lawn Care", "Materials Run"];
   }
-  // Try to load employees (Assuming ID is Column A, Name is Column B, starting row 2)
+  // Try to load employees (only for Admin/Owner)
   var employees = [];
-  var empSheet = ss.getSheetByName('dim_Employees');
-  if (empSheet) {
-    var lastEmpRow = empSheet.getLastRow();
-    if (lastEmpRow > 1) {
-      var empData = empSheet.getRange(2, 1, lastEmpRow - 1, 2).getValues();
-      employees = empData.map(function(row) {
-        return { id: row[0], name: row[1] };
-      }).filter(function(emp) { return emp.id; });
+  if (_isAdminOrOwner()) {
+    var empSheet = ss.getSheetByName('dim_Employees');
+    if (empSheet) {
+      var lastEmpRow = empSheet.getLastRow();
+      if (lastEmpRow > 1) {
+        var empData = empSheet.getRange(2, 1, lastEmpRow - 1, 2).getValues();
+        employees = empData.map(function(row) {
+          return { id: row[0], name: row[1] };
+        }).filter(function(emp) { return emp.id; });
+      }
+    } else {
+      // Fallback default list if the 'dim_Employees' sheet hasn't been created yet
+      employees = [{ id: 'EMP01', name: 'Admin' }];
     }
-  } else {
-    // Fallback default list if the 'dim_Employees' sheet hasn't been created yet
-    employees = [{ id: 'EMP01', name: 'Admin' }];
   }
   
   return { properties: properties, tasks: tasks, employees: employees };
@@ -155,6 +169,11 @@ function getOrCreateReceiptsFolder() {
 // 3. SUBMIT WORK LOG TO SHEETS
 // This is called from the HTML file via google.script.run.submitWorkLog(payload)
 function submitWorkLog(payload) {
+  var activeUser = getUserRole();
+  if (activeUser.role === 'inactive' || activeUser.employeeId === 'UNASSIGNED') {
+    return { success: false, error: "Unauthorized: Your account is not an active employee." };
+  }
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -165,8 +184,14 @@ function submitWorkLog(payload) {
     var timestamp = new Date();
     
     // Dynamically look up active user's Employee ID
-    var activeUser = getUserRole();
-    var employeeId = activeUser.employeeId || "EMP-001";
+    var employeeId = activeUser.employeeId;
+
+    // Only allow Admin/Owner to set non-Owner chargeTarget
+    var validChargeTargets = ['Owner', 'Security Deposit', 'Overhead'];
+    var chargeTarget = 'Owner';
+    if (_isAdminOrOwner() && validChargeTargets.indexOf(payload.chargeTarget) > -1) {
+      chargeTarget = payload.chargeTarget;
+    }
     
     // --- WRITE TO LABOR LOGS SHEET ---
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
@@ -184,7 +209,7 @@ function submitWorkLog(payload) {
       payload.notes,          // Work_Notes
       "Pending",              // Payroll_Status (Approval workflow starts as Pending)
       "Unbilled",             // Billing_Status
-      payload.chargeTarget || "Owner" // Charge_Target
+      chargeTarget            // Charge_Target
     ]);
     
     // --- WRITE TO MATERIALS SHEET (If materials were added) ---
@@ -193,6 +218,10 @@ function submitWorkLog(payload) {
       if (!materialSheet) throw new Error("Could not find sheet: fact_Material_Expenses");
       
       var receiptsFolder = null;
+      var allowedMimeTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'
+      ];
+      var maxFileBytes = 10 * 1024 * 1024; // 10 MB limit
 
       for (var i = 0; i < payload.materials.length; i++) {
         var item = payload.materials[i];
@@ -200,6 +229,10 @@ function submitWorkLog(payload) {
 
         // Handle File Upload to Drive if provided
         if (item.fileData && item.fileName) {
+          var mimeType = (item.fileType || '').toLowerCase();
+          if (allowedMimeTypes.indexOf(mimeType) === -1) {
+            throw new Error("Invalid receipt file type for '" + item.fileName + "'. Only images and PDFs are allowed.");
+          }
           try {
             if (!receiptsFolder) {
               receiptsFolder = getOrCreateReceiptsFolder();
@@ -209,12 +242,16 @@ function submitWorkLog(payload) {
               base64Content = base64Content.split(',')[1];
             }
             var bytes = Utilities.base64Decode(base64Content);
-            var blob = Utilities.newBlob(bytes, item.fileType || 'application/octet-stream', item.fileName);
+            if (bytes.length > maxFileBytes) {
+              throw new Error("Receipt file '" + item.fileName + "' exceeds the 10 MB size limit.");
+            }
+            var safeFileName = item.fileName.replace(/[^\w.\- ()]/g, '_');
+            var blob = Utilities.newBlob(bytes, mimeType, safeFileName);
             var driveFile = receiptsFolder.createFile(blob);
-            driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             receiptUrl = driveFile.getUrl();
           } catch (fileErr) {
             console.error("Error saving receipt photo: " + fileErr.message);
+            throw new Error("Failed to upload receipt: " + fileErr.message);
           }
         }
 
@@ -242,6 +279,7 @@ function submitWorkLog(payload) {
 // 13. SETTLEMENT CALCULATIONS
 
 function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     if (managementFeePercent === undefined) managementFeePercent = 8.0;
@@ -320,7 +358,7 @@ function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
     });
 
     var totalLaborCost = filteredLogs.reduce(function(sum, log) {
-      return sum + (log.billableAmount !== undefined && log.billableAmount > 0 ? log.billableAmount : log.grossPay);
+      return sum + (log.billableAmount !== undefined ? log.billableAmount : log.grossPay);
     }, 0);
     var totalMaterialsCost = filteredMaterials.reduce(function(sum, mat) { return sum + mat.cost; }, 0);
     var totalMaintenance = totalLaborCost + totalMaterialsCost;
@@ -349,6 +387,7 @@ function generateOwnerSettlement(propertyId, monthYear, managementFeePercent) {
 }
 
 function generateSecurityDepositSettlement(leaseId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
 
@@ -404,7 +443,7 @@ function generateSecurityDepositSettlement(leaseId) {
     });
 
     var totalLaborCost = filteredLogs.reduce(function(sum, log) {
-      return sum + (log.billableAmount !== undefined && log.billableAmount > 0 ? log.billableAmount : log.grossPay);
+      return sum + (log.billableAmount !== undefined ? log.billableAmount : log.grossPay);
     }, 0);
     var totalMaterialsCost = filteredMaterials.reduce(function(sum, mat) { return sum + mat.cost; }, 0);
     var totalDamages = totalLaborCost + totalMaterialsCost;
@@ -434,6 +473,7 @@ function generateSecurityDepositSettlement(leaseId) {
 
 // 3.5 GET EMPLOYEE WORK LOGS & DAILY TOTALS
 function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var report = generateOwnerSettlement(propertyId, monthYear, managementFeePercent);
     if (!report.success) throw new Error(report.error);
@@ -482,7 +522,7 @@ function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
     if (st.laborItems.length > 0 || st.materialItems.length > 0) {
        body.appendParagraph("Labor:");
        st.laborItems.forEach(function(log) {
-         var amt = (log.billableAmount !== undefined && log.billableAmount > 0) ? log.billableAmount : log.grossPay;
+         var amt = log.billableAmount !== undefined ? log.billableAmount : log.grossPay;
          body.appendParagraph("- " + log.dateCompleted + ": " + log.taskId + " (" + log.hoursWorked + " hrs) = $" + amt.toFixed(2));
        });
        body.appendParagraph("Materials:");
@@ -520,18 +560,12 @@ function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
 }
 
 function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var report = generateSecurityDepositSettlement(leaseId);
     if (!report.success) throw new Error(report.error);
     var st = report.settlement;
     
-    var waived = parseFloat(waivedLateFees) || 0;
-    if (waived > st.lateFeesIncurred) {
-        waived = st.lateFeesIncurred;
-    }
-    var netLateFees = st.lateFeesIncurred - waived;
-    var finalNetRefund = st.securityDeposit - st.unpaidRent - netLateFees - st.totalDamages;
-
     var waived = parseFloat(waivedLateFees) || 0;
     if (waived > st.lateFeesIncurred) {
         waived = st.lateFeesIncurred;
@@ -573,7 +607,7 @@ function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
     if (st.laborItems.length > 0 || st.materialItems.length > 0) {
        body.appendParagraph("Labor Deductions:");
        st.laborItems.forEach(function(log) {
-         var amt = (log.billableAmount !== undefined && log.billableAmount > 0) ? log.billableAmount : log.grossPay;
+         var amt = log.billableAmount !== undefined ? log.billableAmount : log.grossPay;
          body.appendParagraph("- " + log.dateCompleted + ": " + log.taskId + " (" + log.workNotes + ") = $" + amt.toFixed(2));
        });
        body.appendParagraph("Material Deductions:");
@@ -612,10 +646,13 @@ function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
 
 // 3.5 GET EMPLOYEE WORK LOGS & DAILY TOTALS
 function getEmployeeWorkLogs() {
+  var activeUser = getUserRole();
+  if (activeUser.role === 'inactive' || activeUser.employeeId === 'UNASSIGNED') {
+    return { success: false, error: "Unauthorized: Your account is not an active employee." };
+  }
   try {
     var ss = getSpreadsheet();
-    var activeUser = getUserRole();
-    var employeeId = activeUser.employeeId || "EMP-001";
+    var employeeId = activeUser.employeeId;
 
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
     var punches = [];
@@ -684,6 +721,12 @@ function getEmployeeWorkLogs() {
 
 // 3.6 UPDATE EXISTING WORK LOG
 function updateWorkLog(payload) {
+  var activeUser = getUserRole();
+  if (activeUser.role === 'inactive' || activeUser.employeeId === 'UNASSIGNED') {
+    return { success: false, error: "Unauthorized access." };
+  }
+  var isAdmin = _isAdminOrOwner();
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000); // Wait up to 10 seconds for other processes to finish
@@ -697,14 +740,21 @@ function updateWorkLog(payload) {
     var range = laborSheet.getRange(2, 1, lastRow - 1, 11);
     var values = range.getValues();
 
-    var updated = false;
     var rowToUpdate = -1;
     for (var i = 0; i < values.length; i++) {
       var id = (values[i][0] || '').toString().trim();
       if (id === payload.workLogId) {
+        var rowEmpId = (values[i][3] || '').toString().trim();
+        if (!isAdmin && rowEmpId !== activeUser.employeeId) {
+          throw new Error("Unauthorized: You can only edit your own work logs.");
+        }
+
         var payrollStatus = (values[i][8] || '').toString().trim().toLowerCase();
         if (payrollStatus === 'paid') {
           throw new Error("Cannot edit a punch that has already been marked as Paid.");
+        }
+        if (!isAdmin && payrollStatus === 'approved') {
+          throw new Error("Cannot edit a punch that has already been Approved.");
         }
 
         rowToUpdate = i + 2;
@@ -717,16 +767,17 @@ function updateWorkLog(payload) {
     // Update only the specific row to prevent lost updates
     var updatedRowRange = laborSheet.getRange(rowToUpdate, 3, 1, 6); // Col 3 (Date) to Col 8 (Notes)
     var updatedRowData = [[
-      payload.date,       // Date_Completed
+      payload.date,               // Date_Completed
       values[rowToUpdate - 2][3], // Preserve Employee_ID (Col 4, index 3 in values)
-      payload.propertyId, // Property_ID
-      payload.taskId,     // Task_ID
-      payload.hours,      // Hours_Worked
-      payload.notes       // Work_Notes
+      payload.propertyId,         // Property_ID
+      payload.taskId,             // Task_ID
+      payload.hours,              // Hours_Worked
+      payload.notes               // Work_Notes
     ]];
     updatedRowRange.setValues(updatedRowData);
 
-    if (payload.chargeTarget !== undefined) {
+    var validChargeTargets = ['Owner', 'Security Deposit', 'Overhead'];
+    if (isAdmin && payload.chargeTarget !== undefined && validChargeTargets.indexOf(payload.chargeTarget) > -1) {
       laborSheet.getRange(rowToUpdate, 11, 1, 1).setValue(payload.chargeTarget);
     }
 
@@ -891,6 +942,7 @@ function updateChargeAmount(workLogId, amount) {
 // 4. ADMIN PAYROLL & BILLING CALCULATIONS WITH DATE FILTERING
 // Fetches records from fact_Work_Logs, dim_Employees, and fact_Material_Expenses with optional start/end date filtering.
 function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     
@@ -965,8 +1017,8 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
         var payRate = empInfo.payRate;
         var grossPay = hours * payRate;
 
-        // Calculate Billable Amount
-        var billableRate = 0;
+        // Calculate Billable Amount (fallback to employee payRate if no rate configured in dim_Billing_Rates)
+        var billableRate = payRate;
         if (rateMap[taskId + '_' + empId] !== undefined) {
           billableRate = rateMap[taskId + '_' + empId];
         } else if (rateMap[taskId + '_DEFAULT'] !== undefined) {
@@ -1101,22 +1153,33 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
         approvedPayrollGrossPay += log.grossPay;
       }
 
-      if (log.billingStatus.toLowerCase() === 'unbilled') {
-        totalUnbilledLaborCost += log.grossPay;
+      var isOwnerCharge = !log.chargeTarget || log.chargeTarget === 'Owner';
+      if (isOwnerCharge && log.billingStatus.toLowerCase() === 'unbilled') {
+        totalUnbilledLaborCost += log.billableAmount;
       }
     });
 
-    // Filter materials to match filtered work logs
+    // Map workLogId -> log for filtering and material billing status lookup
     var validWorkLogIds = {};
-    workLogs.forEach(function(log) { validWorkLogIds[log.workLogId] = true; });
+    var unbilledOwnerWorkLogIds = {};
+    workLogs.forEach(function(log) {
+      validWorkLogIds[log.workLogId] = true;
+      var isOwnerCharge = !log.chargeTarget || log.chargeTarget === 'Owner';
+      if (isOwnerCharge && log.billingStatus.toLowerCase() === 'unbilled') {
+        unbilledOwnerWorkLogIds[log.workLogId] = true;
+      }
+    });
     
     var filteredMaterials = materials.filter(function(mat) {
       return !mat.workLogId || validWorkLogIds[mat.workLogId];
     });
 
-    // Aggregates for Billing by Property
+    // Aggregates for Billing by Property (Owner-chargeable unbilled items only)
     var propertySummaries = {};
     workLogs.forEach(function(log) {
+      var isOwnerCharge = !log.chargeTarget || log.chargeTarget === 'Owner';
+      if (!isOwnerCharge) return;
+
       var propId = log.propertyId || 'Unassigned';
       if (!propertySummaries[propId]) {
         propertySummaries[propId] = {
@@ -1130,12 +1193,15 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
       }
       if (log.billingStatus.toLowerCase() === 'unbilled') {
         propertySummaries[propId].unbilledHours += log.hoursWorked;
-        propertySummaries[propId].unbilledLaborCost += log.grossPay;
+        propertySummaries[propId].unbilledLaborCost += log.billableAmount;
         propertySummaries[propId].logCount++;
       }
     });
 
     filteredMaterials.forEach(function(mat) {
+      // Only include materials whose parent work log is an unbilled Owner charge
+      if (mat.workLogId && !unbilledOwnerWorkLogIds[mat.workLogId]) return;
+
       var propId = mat.propertyId || 'Unassigned';
       if (!propertySummaries[propId]) {
         propertySummaries[propId] = {
@@ -1226,7 +1292,7 @@ function markPayrollPaid(payload) {
         if (startDate && logDate && logDate < startDate) inDateRange = false;
         if (endDate && logDate && logDate > endDate) inDateRange = false;
 
-        if (inDateRange && (!employeeId || empIdInRow === employeeId) && (status === 'pending' || status === 'approved' || status === 'submitted')) {
+        if (inDateRange && (!employeeId || empIdInRow === employeeId) && status === 'approved') {
           fullDataValues[i][payrollStatusColIdx] = 'Paid';
           updated = true;
         }
@@ -1277,6 +1343,7 @@ function markPayrollPaid(payload) {
 
 // 5.5. GET PAYROLL HISTORY
 function getPayrollHistory() {
+    if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
     try {
         var ss = getSpreadsheet();
         var historySheet = ss.getSheetByName('fact_Payroll_History');
@@ -1317,19 +1384,30 @@ function getPayrollHistory() {
 
 // 6. GENERATE ITEMIZED INVOICE REPORT
 function generateInvoiceReport(propertyId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var adminData = getAdminPayrollData();
     if (!adminData.success) throw new Error(adminData.error);
 
     var filteredLogs = adminData.workLogs.filter(function(log) {
-      return log.propertyId === propertyId && log.billingStatus.toLowerCase() === 'unbilled';
+      var isOwnerCharge = !log.chargeTarget || log.chargeTarget === 'Owner';
+      return log.propertyId === propertyId && log.billingStatus.toLowerCase() === 'unbilled' && isOwnerCharge;
+    });
+
+    var unbilledWorkLogIds = {};
+    filteredLogs.forEach(function(log) {
+      unbilledWorkLogIds[log.workLogId] = true;
     });
 
     var filteredMaterials = adminData.materials.filter(function(mat) {
-      return mat.propertyId === propertyId;
+      if (mat.propertyId !== propertyId) return false;
+      if (mat.workLogId && !unbilledWorkLogIds[mat.workLogId]) return false;
+      return true;
     });
 
-    var totalLabor = filteredLogs.reduce(function(sum, log) { return sum + log.grossPay; }, 0);
+    var totalLabor = filteredLogs.reduce(function(sum, log) {
+      return sum + (log.billableAmount !== undefined ? log.billableAmount : log.grossPay);
+    }, 0);
     var totalHours = filteredLogs.reduce(function(sum, log) { return sum + log.hoursWorked; }, 0);
     var totalMaterials = filteredMaterials.reduce(function(sum, mat) { return sum + mat.cost; }, 0);
 
@@ -1373,13 +1451,17 @@ function markPropertyBilled(propertyId) {
       var propRange = laborSheet.getRange(2, 5, lastRow - 1, 1); // Get Property_ID column
       var propValues = propRange.getValues();
 
+      var targetRange = laborSheet.getRange(2, 11, lastRow - 1, 1); // Get Charge_Target column
+      var targetValues = targetRange.getValues();
+
       var updated = false;
 
       for (var i = 0; i < values.length; i++) {
         var propIdInRow = (propValues[i][0] || '').toString().trim();
         var status = (values[i][0] || '').toString().trim().toLowerCase();
+        var chargeTarget = (targetValues[i][0] || 'Owner').toString().trim();
 
-        if (propIdInRow === propertyId && status === 'unbilled') {
+        if (propIdInRow === propertyId && status === 'unbilled' && (!chargeTarget || chargeTarget === 'Owner')) {
           values[i][0] = 'Billed';
           updated = true;
         }
@@ -1400,6 +1482,7 @@ function markPropertyBilled(propertyId) {
 
 // 8. EXPORT INVOICE TO GOOGLE DOC & PDF
 function exportInvoicePDF(propertyId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var report = generateInvoiceReport(propertyId);
     if (!report.success) throw new Error(report.error);
@@ -1428,12 +1511,13 @@ function exportInvoicePDF(propertyId) {
     if (inv.laborItems && inv.laborItems.length > 0) {
       var laborTableData = [["Date", "Worker", "Task / Description", "Hours", "Cost"]];
       inv.laborItems.forEach(function(item) {
+        var itemCost = item.billableAmount !== undefined ? item.billableAmount : item.grossPay;
         laborTableData.push([
           item.dateCompleted,
           item.employeeName,
           item.taskId + " - " + item.workNotes,
           item.hoursWorked.toString(),
-          "$" + item.grossPay.toFixed(2)
+          "$" + itemCost.toFixed(2)
         ]);
       });
       body.appendTable(laborTableData);
@@ -1503,6 +1587,7 @@ function exportInvoicePDF(propertyId) {
 
 // 9. ADD NEW LEASE AND MULTIPLE TENANTS
 function addLease(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1594,6 +1679,7 @@ function recordLedgerEntry(payload) {
 
 // 11. FETCH LEASES AND THEIR TENANTS (For UI Dropdowns)
 function getLeasesAndTenants() {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
 
@@ -1642,6 +1728,7 @@ function getLeasesAndTenants() {
 
 // 12. CALCULATE OUTSTANDING BALANCE FOR A LEASE
 function calculateLeaseBalance(leaseId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
 
@@ -1650,13 +1737,16 @@ function calculateLeaseBalance(leaseId) {
 
     var ledgerSheet = ss.getSheetByName('fact_Rent_Ledger');
 
-    var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 7).getValues();
+    var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, leaseSheet.getLastColumn()).getValues();
     var lease = null;
     for (var i = 0; i < leaseData.length; i++) {
       if (leaseData[i][0] === leaseId) {
         lease = {
           startDate: parseLocalDate(leaseData[i][2], false),
-          monthlyRent: parseFloat(leaseData[i][4]) || 0
+          endDate: parseLocalDate(leaseData[i][3], true),
+          monthlyRent: parseFloat(leaseData[i][4]) || 0,
+          lateFeePerDay: parseFloat(leaseData[i][8]) || 5.0,
+          gracePeriodDays: parseInt(leaseData[i][9], 10) || 5
         };
         break;
       }
@@ -1664,16 +1754,17 @@ function calculateLeaseBalance(leaseId) {
 
     if (!lease) throw new Error("Lease not found");
 
-    // Calculate full months passed
+    // Calculate full months passed, capped at lease endDate so expired leases stop accruing rent
     var currentDate = new Date();
+    var effectiveDate = (lease.endDate && currentDate > lease.endDate) ? lease.endDate : currentDate;
     var monthsPassed = 0;
-    if (currentDate > lease.startDate) {
+    if (lease.startDate && effectiveDate >= lease.startDate) {
         var d1 = lease.startDate;
-        var d2 = currentDate;
+        var d2 = effectiveDate;
         var months = (d2.getFullYear() - d1.getFullYear()) * 12;
         months -= d1.getMonth();
         months += d2.getMonth();
-        // If current day is less than start day, a full month hasn't passed yet for the current month
+        // If effective day is less than start day, a full month hasn't passed yet for the current month
         if (d2.getDate() < d1.getDate()) {
             months--;
         }
@@ -1684,18 +1775,32 @@ function calculateLeaseBalance(leaseId) {
     var expectedRent = monthsPassed * lease.monthlyRent;
     var totalCharges = 0;
     var totalPayments = 0;
+    var lateFeesIncurred = 0;
 
     if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
       var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
       for (var j = 0; j < ledgerData.length; j++) {
         if (ledgerData[j][1] === leaseId) {
-          totalCharges += parseFloat(ledgerData[j][5]) || 0;
-          totalPayments += parseFloat(ledgerData[j][6]) || 0;
+          var txType = (ledgerData[j][4] || '').toString().trim();
+          var chargeAmt = parseFloat(ledgerData[j][5]) || 0;
+          var paymentAmt = parseFloat(ledgerData[j][6]) || 0;
+
+          // Exclude initial Security Deposit collection from rent balance calculations
+          if (txType === 'Security Deposit') continue;
+
+          totalCharges += chargeAmt;
+          totalPayments += paymentAmt;
+
+          if (txType === 'Late Fee') {
+            lateFeesIncurred += (chargeAmt - paymentAmt);
+          }
         }
       }
     }
 
-    // Balance = (Expected Rent from start to now) + (Additional Charges like Late Fees) - (Payments)
+    lateFeesIncurred = Math.max(0, lateFeesIncurred);
+
+    // Balance = (Expected Rent from start to effective end) + (Additional Charges like Late Fees) - (Payments)
     var balance = expectedRent + totalCharges - totalPayments;
 
     return {
@@ -1704,6 +1809,7 @@ function calculateLeaseBalance(leaseId) {
       expectedRent: expectedRent,
       totalCharges: totalCharges,
       totalPayments: totalPayments,
+      lateFeesIncurred: lateFeesIncurred,
       monthsPassed: monthsPassed
     };
 
@@ -2041,6 +2147,7 @@ function setupDatabase() {
 
 // 12. BILLING RATES CRUD
 function getBillingRates() {
+  if (!_isAdminOrOwner()) return [];
   try {
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
@@ -2067,6 +2174,7 @@ function getBillingRates() {
 }
 
 function addBillingRate(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
@@ -2088,6 +2196,7 @@ function addBillingRate(payload) {
 }
 
 function updateBillingRate(payload) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
@@ -2117,6 +2226,7 @@ function updateBillingRate(payload) {
 }
 
 function deleteBillingRate(rateId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
@@ -2140,6 +2250,7 @@ function deleteBillingRate(rateId) {
 
 // 13. GET EXECUTIVE DASHBOARD DATA
 function getExecutiveDashboardData(startDateStr, endDateStr) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
 
@@ -2193,7 +2304,8 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
       ledgerData.forEach(function(row) {
         var lDate = new Date(row[3]);
-        if (lDate >= startDate && lDate <= endDate) {
+        var txType = (row[4] || '').toString().trim();
+        if (txType === 'Rent' && lDate >= startDate && lDate <= endDate) {
            totalRentCollectedPeriod += parseFloat(row[6]) || 0;
         }
       });
@@ -2253,12 +2365,21 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
       });
     }
 
+    var empSheet = ss.getSheetByName('dim_Employees');
+    var employeeMap = {};
+    if (empSheet && empSheet.getLastRow() > 1) {
+      var empData = empSheet.getRange(2, 1, empSheet.getLastRow() - 1, 7).getValues();
+      empData.forEach(function(row) {
+        employeeMap[(row[0] || '').toString().trim()] = parseFloat(row[3]) || 0;
+      });
+    }
+
     var laborData = [];
     if (laborSheet && laborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues());
+      laborData = laborData.concat(laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 12).getValues());
     }
     if (archiveLaborSheet && archiveLaborSheet.getLastRow() > 1) {
-      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 11).getValues());
+      laborData = laborData.concat(archiveLaborSheet.getRange(2, 1, archiveLaborSheet.getLastRow() - 1, 12).getValues());
     }
 
     var matData = [];
@@ -2280,9 +2401,17 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
         var logDate = new Date(row[2]);
         var billingStatus = (row[9] || '').toString().trim();
         var chargeTarget = (row[10] || 'Owner').toString().trim();
+        var payRate = employeeMap[empId] || 0;
 
-        var billableRate = rateMap[taskId + '_' + empId] !== undefined ? rateMap[taskId + '_' + empId] : (rateMap[taskId + '_DEFAULT'] !== undefined ? rateMap[taskId + '_DEFAULT'] : 0);
+        var billableRate = rateMap[taskId + '_' + empId] !== undefined ? rateMap[taskId + '_' + empId] : (rateMap[taskId + '_DEFAULT'] !== undefined ? rateMap[taskId + '_DEFAULT'] : payRate);
         var billableAmount = hours * billableRate;
+        var customBillableRaw = row[11];
+        if (customBillableRaw !== undefined && customBillableRaw !== null && customBillableRaw !== '') {
+          var parsedCustom = parseFloat(customBillableRaw);
+          if (!isNaN(parsedCustom)) {
+            billableAmount = parsedCustom;
+          }
+        }
 
         if (chargeTarget === 'Owner') {
           logs.push({
@@ -2350,15 +2479,6 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
     var totalCashIn = totalRentCollectedPeriod + totalMaintCollectedPeriod;
     var totalCashOut = 0;
     var totalPayrollPaidPeriod = 0;
-
-    var empSheet = ss.getSheetByName('dim_Employees');
-    var employeeMap = {};
-    if (empSheet && empSheet.getLastRow() > 1) {
-      var empData = empSheet.getRange(2, 1, empSheet.getLastRow() - 1, 7).getValues();
-      empData.forEach(function(row) {
-        employeeMap[row[0]] = parseFloat(row[3]) || 0;
-      });
-    }
 
     if (laborData.length > 0) {
       laborData.forEach(function(row) {
@@ -2428,6 +2548,7 @@ function getExecutiveDashboardData(startDateStr, endDateStr) {
 
 // 14. MARK PROPERTY INVOICE AS PAID
 function markPropertyPaid(propertyId) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -2443,13 +2564,17 @@ function markPropertyPaid(propertyId) {
       var propRange = laborSheet.getRange(2, 5, lastRow - 1, 1);
       var propValues = propRange.getValues();
 
+      var targetRange = laborSheet.getRange(2, 11, lastRow - 1, 1);
+      var targetValues = targetRange.getValues();
+
       var updated = false;
 
       for (var i = 0; i < values.length; i++) {
         var propIdInRow = (propValues[i][0] || '').toString().trim();
         var status = (values[i][0] || '').toString().trim().toLowerCase();
+        var chargeTarget = (targetValues[i][0] || 'Owner').toString().trim();
 
-        if (propIdInRow === propertyId && status === 'billed') {
+        if (propIdInRow === propertyId && status === 'billed' && (!chargeTarget || chargeTarget === 'Owner')) {
           values[i][0] = 'Paid';
           updated = true;
         }
@@ -2468,6 +2593,7 @@ function markPropertyPaid(propertyId) {
 }
 // 17. GET RENT ROLL DATA FOR RENT TRACKING
 function getRentRollData(year) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
   try {
     var ss = getSpreadsheet();
     var propSheet = ss.getSheetByName('Properties');

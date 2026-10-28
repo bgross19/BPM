@@ -52,6 +52,7 @@
                 
                 if (userInfo && userInfo.role === 'admin') displayRole = 'Admin';
                 else if (userInfo && userInfo.role === 'owner') displayRole = 'Owner / Executive';
+                else if (userInfo && userInfo.role === 'inactive') displayRole = 'Inactive';
                 
                 document.getElementById('user-role-display').innerText = displayRole;
                 document.getElementById('user-avatar').innerText = displayName.charAt(0).toUpperCase();
@@ -65,7 +66,6 @@
             .getUserRole();
             
         initDashboardDates();
-        initRentTracking();
         // Add all missing event listeners
 
         // Main Form Submissions
@@ -388,6 +388,7 @@
             else dashTab.classList.add('hidden');
             
             loadLeasesAndTenants();
+            initRentTracking();
         } else {
             document.getElementById('tab-payroll-view').classList.add('hidden');
             document.getElementById('tab-billing-view').classList.add('hidden');
@@ -560,7 +561,7 @@
             taskId: document.getElementById('log-task').value.trim(),
             hours: parseFloat(document.getElementById('log-hours').value),
             notes: document.getElementById('log-notes').value,
-            chargeTarget: currentRole === 'admin' ? document.getElementById('log-charge-target').value : 'Owner',
+            chargeTarget: (currentRole === 'admin' || currentRole === 'owner') ? document.getElementById('log-charge-target').value : 'Owner',
             materials: []
         };
 
@@ -1758,6 +1759,7 @@
 
     function initRentTracking() {
         const yearSelect = document.getElementById('rt-year-filter');
+        yearSelect.innerHTML = '';
         const currentYear = new Date().getFullYear();
         for (var y = currentYear - 2; y <= currentYear + 2; y++) {
             yearSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
