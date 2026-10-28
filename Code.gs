@@ -2201,7 +2201,9 @@ function getBillingRates() {
 
 function addBillingRate(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
@@ -2218,12 +2220,16 @@ function addBillingRate(payload) {
     return { success: true, message: "Rate added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function updateBillingRate(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet not found");
@@ -2248,12 +2254,16 @@ function updateBillingRate(payload) {
     throw new Error("Rate ID not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function deleteBillingRate(rateId) {
   if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet not found");
@@ -2271,6 +2281,8 @@ function deleteBillingRate(rateId) {
     throw new Error("Rate ID not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2726,6 +2738,26 @@ function _isAdminOrOwner() {
   return activeUser.role === 'admin' || activeUser.role === 'owner';
 }
 
+function _cascadeColumnRename(ss, sheetName, colNumber, oldVal, newVal) {
+  if (!oldVal || !newVal || oldVal === newVal) return;
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return;
+  var range = sheet.getRange(2, colNumber, lastRow - 1, 1);
+  var values = range.getValues();
+  var changed = false;
+  for (var i = 0; i < values.length; i++) {
+    if (values[i][0] === oldVal) {
+      values[i][0] = newVal;
+      changed = true;
+    }
+  }
+  if (changed) {
+    range.setValues(values);
+  }
+}
+
 function getProperties() {
   if (!_isAdminOrOwner()) return [];
   try {
@@ -2745,7 +2777,9 @@ function getProperties() {
 
 function addProperty(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
@@ -2753,12 +2787,16 @@ function addProperty(payload) {
     return { success: true, message: "Property added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function updateProperty(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
@@ -2768,18 +2806,29 @@ function updateProperty(payload) {
     for (var i = 0; i < data.length; i++) {
       if (data[i][0] === payload.oldPropertyName) {
         sheet.getRange(i + 2, 1, 1, 3).setValues([[payload.propertyName, payload.ownerCompany || "", payload.address || ""]]);
+        if (payload.oldPropertyName && payload.propertyName && payload.oldPropertyName !== payload.propertyName) {
+          _cascadeColumnRename(ss, 'fact_Work_Logs', 5, payload.oldPropertyName, payload.propertyName);
+          _cascadeColumnRename(ss, 'archive_fact_Work_Logs', 5, payload.oldPropertyName, payload.propertyName);
+          _cascadeColumnRename(ss, 'fact_Material_Expenses', 3, payload.oldPropertyName, payload.propertyName);
+          _cascadeColumnRename(ss, 'archive_fact_Material_Expenses', 3, payload.oldPropertyName, payload.propertyName);
+          _cascadeColumnRename(ss, 'fact_Leases', 2, payload.oldPropertyName, payload.propertyName);
+        }
         return { success: true, message: "Property updated" };
       }
     }
     throw new Error("Property not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function deleteProperty(propertyName) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
@@ -2795,6 +2844,8 @@ function deleteProperty(propertyName) {
     throw new Error("Property not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2826,7 +2877,9 @@ function getEmployees() {
 
 function addEmployee(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
@@ -2843,12 +2896,16 @@ function addEmployee(payload) {
     return { success: true, message: "Employee added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function updateEmployee(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
@@ -2872,12 +2929,16 @@ function updateEmployee(payload) {
     throw new Error("Employee not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function deleteEmployee(employeeId) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
@@ -2893,6 +2954,8 @@ function deleteEmployee(employeeId) {
     throw new Error("Employee not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2916,7 +2979,9 @@ function getTasks() {
 
 function addTask(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
@@ -2924,12 +2989,16 @@ function addTask(payload) {
     return { success: true, message: "Task added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function updateTask(payload) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
@@ -2939,18 +3008,28 @@ function updateTask(payload) {
     for (var i = 0; i < data.length; i++) {
       if (data[i][0] === payload.oldTaskName) {
         sheet.getRange(i + 2, 1, 1, 1).setValues([[payload.taskName]]);
+        if (payload.oldTaskName && payload.taskName && payload.oldTaskName !== payload.taskName) {
+          _cascadeColumnRename(ss, 'fact_Work_Logs', 6, payload.oldTaskName, payload.taskName);
+          _cascadeColumnRename(ss, 'archive_fact_Work_Logs', 6, payload.oldTaskName, payload.taskName);
+          _cascadeColumnRename(ss, 'dim_Billing_Rates', 2, payload.oldTaskName, payload.taskName);
+          _cascadeColumnRename(ss, 'dim_Billing_Rates', 3, payload.oldTaskName, payload.taskName);
+        }
         return { success: true, message: "Task updated" };
       }
     }
     throw new Error("Task not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function deleteTask(taskName) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
@@ -2966,6 +3045,8 @@ function deleteTask(taskName) {
     throw new Error("Task not found");
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -2976,7 +3057,9 @@ function deleteTask(taskName) {
 
 function addBillingRatesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Billing_Rates');
     if (!sheet) throw new Error("Sheet dim_Billing_Rates not found");
@@ -3003,12 +3086,16 @@ function addBillingRatesBulk(payloads) {
     return { success: true, message: rows.length + " Rates added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function addPropertiesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Properties');
     if (!sheet) throw new Error("Properties sheet not found");
@@ -3031,12 +3118,16 @@ function addPropertiesBulk(payloads) {
     return { success: true, message: rows.length + " Properties added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function addEmployeesBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('dim_Employees');
     if (!sheet) throw new Error("dim_Employees sheet not found");
@@ -3064,12 +3155,16 @@ function addEmployeesBulk(payloads) {
     return { success: true, message: rows.length + " Employees added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function addTasksBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     var ss = getSpreadsheet();
     var sheet = ss.getSheetByName('Tasks');
     if (!sheet) throw new Error("Tasks sheet not found");
@@ -3090,6 +3185,8 @@ function addTasksBulk(payloads) {
     return { success: true, message: rows.length + " Tasks added" };
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 

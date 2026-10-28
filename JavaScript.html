@@ -9,6 +9,30 @@
     let currentAdminWorkLogs = [];
     let currentSortCol = '';
     let sortAscending = true;
+    let billingRatesCache = [];
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeJsStr(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
 
     function initializeApp() {
         const logDateInput = document.getElementById('log-date');
@@ -334,7 +358,7 @@
         const propList = document.getElementById('property-list');
         if (propList) {
             propList.innerHTML = '';
-            validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${prop}">`));
+            validProperties.forEach(prop => propList.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(prop)}">`));
         }
 
         // Populate Tasks dropdowns
@@ -347,7 +371,7 @@
         taskDropdowns.forEach(dropdown => {
             if (!dropdown) return;
             dropdown.innerHTML = '<option value="">-- Select Task --</option>';
-            validTasks.forEach(task => dropdown.insertAdjacentHTML('beforeend', `<option value="${task}">${task}</option>`));
+            validTasks.forEach(task => dropdown.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(task)}">${escapeHtml(task)}</option>`));
 
             if (dropdown.id === 'log-task' || dropdown.id === 'edit-log-task') {
                 dropdown.insertAdjacentHTML('beforeend', `<option value="ADD_NEW_TASK">Add New Task...</option>`);
@@ -370,7 +394,7 @@
         if (empDropdown) {
             empDropdown.innerHTML = '<option value="">-- Select Employee --</option><option value="DEFAULT">Default (All Employees)</option>';
             validEmployees.forEach(emp => {
-                empDropdown.insertAdjacentHTML('beforeend', `<option value="${emp.id}">${emp.name} (${emp.id})</option>`);
+                empDropdown.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(emp.id)}">${escapeHtml(emp.name)} (${escapeHtml(emp.id)})</option>`);
             });
         }
     }
@@ -673,15 +697,15 @@
                     <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50 transition-colors">
                         <div class="space-y-1">
                             <div class="flex items-center gap-2">
-                                <span class="font-semibold text-gray-900">${punch.propertyId}</span>
-                                <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${statusClass}">${punch.payrollStatus}</span>
+                                <span class="font-semibold text-gray-900">${escapeHtml(punch.propertyId)}</span>
+                                <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${statusClass}">${escapeHtml(punch.payrollStatus)}</span>
                             </div>
-                            <p class="text-xs text-gray-600"><span class="font-medium text-gray-800">${punch.taskId}</span> &bull; ${punch.workNotes}</p>
-                            <p class="text-xs text-gray-400"><i class="far font-medium fa-calendar mr-1"></i>${punch.dateCompleted}</p>
+                            <p class="text-xs text-gray-600"><span class="font-medium text-gray-800">${escapeHtml(punch.taskId)}</span> &bull; ${escapeHtml(punch.workNotes)}</p>
+                            <p class="text-xs text-gray-400"><i class="far font-medium fa-calendar mr-1"></i>${escapeHtml(punch.dateCompleted)}</p>
                         </div>
                         <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 pt-2 sm:pt-0">
                             <span class="font-bold text-gray-800 text-sm">${punch.hoursWorked.toFixed(2)} hrs</span>
-                            <button onclick="openEditModal('${punch.workLogId}')" ${statusLower === 'approved' || isPaid ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center gap-1">
+                            <button onclick="openEditModal('${escapeJsStr(punch.workLogId)}')" ${statusLower === 'approved' || isPaid ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center gap-1">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
                         </div>
@@ -846,11 +870,11 @@
 
             historyTbody.insertAdjacentHTML('beforeend', `
                 <tr class="hover:bg-gray-50">
-                    <td class="py-3 px-4 whitespace-nowrap">${dateLogged}</td>
-                    <td class="py-3 px-4 font-medium text-gray-800">${log.employeeName || log.employeeId}</td>
-                    <td class="py-3 px-4">${timePeriod}</td>
+                    <td class="py-3 px-4 whitespace-nowrap">${escapeHtml(dateLogged)}</td>
+                    <td class="py-3 px-4 font-medium text-gray-800">${escapeHtml(log.employeeName || log.employeeId)}</td>
+                    <td class="py-3 px-4">${escapeHtml(timePeriod)}</td>
                     <td class="py-3 px-4 font-semibold text-green-700">$${log.amountPaid.toFixed(2)}</td>
-                    <td class="py-3 px-4">${log.paymentMethod || 'Unknown'}</td>
+                    <td class="py-3 px-4">${escapeHtml(log.paymentMethod || 'Unknown')}</td>
                 </tr>
             `);
         });
@@ -921,30 +945,30 @@
                 approvalTbody.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-gray-50 border-b">
                         <td class="py-3 px-4 text-center">
-                            <input type="checkbox" class="approval-row-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" data-id="${log.workLogId}" ${isApprovedOrPaid ? 'disabled' : ''} onchange="toggleApproveAllBtn()">
+                            <input type="checkbox" class="approval-row-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" data-id="${escapeHtml(log.workLogId)}" ${isApprovedOrPaid ? 'disabled' : ''} onchange="toggleApproveAllBtn()">
                         </td>
-                        <td class="py-3 px-4 font-medium">${log.dateCompleted}</td>
-                        <td class="py-3 px-4 font-medium text-gray-900">${log.employeeName}</td>
-                        <td class="py-3 px-4"><span class="font-semibold text-gray-800">${log.propertyId}</span> <span class="text-gray-400">&bull; ${log.taskId}</span></td>
+                        <td class="py-3 px-4 font-medium">${escapeHtml(log.dateCompleted)}</td>
+                        <td class="py-3 px-4 font-medium text-gray-900">${escapeHtml(log.employeeName)}</td>
+                        <td class="py-3 px-4"><span class="font-semibold text-gray-800">${escapeHtml(log.propertyId)}</span> <span class="text-gray-400">&bull; ${escapeHtml(log.taskId)}</span></td>
                         <td class="py-3 px-4 font-bold text-gray-800">${log.hoursWorked.toFixed(2)} hrs</td>
-                        <td class="py-3 px-4 text-gray-500 max-w-xs truncate" title="${log.workNotes}">${log.workNotes}</td>
+                        <td class="py-3 px-4 text-gray-500 max-w-xs truncate" title="${escapeHtml(log.workNotes)}">${escapeHtml(log.workNotes)}</td>
                         <td class="py-3 px-4">
                             <div class="flex items-center gap-1">
                                 <span class="text-gray-500">$</span>
-                                <input type="number" step="0.01" min="0" class="w-20 p-1 text-sm border border-gray-300 rounded outline-none focus:border-blue-500" value="${amountVal}" onblur="saveCustomChargeAmount('${log.workLogId}', this)" />
-                                <button type="button" title="Revert to calculated amount ($${originalAmount})" onclick="revertCustomChargeAmount('${log.workLogId}', this, ${originalAmount})" class="text-gray-400 hover:text-blue-600 p-1"><i class="fas fa-undo-alt text-xs"></i></button>
+                                <input type="number" step="0.01" min="0" class="w-20 p-1 text-sm border border-gray-300 rounded outline-none focus:border-blue-500" value="${amountVal}" onblur="saveCustomChargeAmount('${escapeJsStr(log.workLogId)}', this)" />
+                                <button type="button" title="Revert to calculated amount ($${originalAmount})" onclick="revertCustomChargeAmount('${escapeJsStr(log.workLogId)}', this, ${originalAmount})" class="text-gray-400 hover:text-blue-600 p-1"><i class="fas fa-undo-alt text-xs"></i></button>
                             </div>
                         </td>
-                        <td class="py-3 px-4 font-medium">${log.chargeTarget || 'Owner'}</td>
-                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${log.payrollStatus}</span></td>
+                        <td class="py-3 px-4 font-medium">${escapeHtml(log.chargeTarget || 'Owner')}</td>
+                        <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${escapeHtml(log.payrollStatus)}</span></td>
                         <td class="py-3 px-4 text-right">
                             <div class="flex justify-end gap-1">
-                                <button onclick="openEditAdminModal('${log.workLogId}')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
+                                <button onclick="openEditAdminModal('${escapeJsStr(log.workLogId)}')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
                                 ${statusLower === 'approved'
-                                    ? `<button onclick="setApprovalStatus('${log.workLogId}', 'Pending')" class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded text-xs">Unapprove</button>`
-                                    : `<button onclick="setApprovalStatus('${log.workLogId}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>`
+                                    ? `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Pending')" class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded text-xs">Unapprove</button>`
+                                    : `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>`
                                 }
-                                <button onclick="setApprovalStatus('${log.workLogId}', 'Rejected')" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
+                                <button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Rejected')" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
                             </div>
                         </td>
                     </tr>
@@ -960,12 +984,12 @@
             res.employeeSummaries.forEach(emp => {
                 payrollTbody.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-gray-50">
-                        <td class="py-3 px-4 font-medium text-gray-900">${emp.name} <span class="text-xs text-gray-400">(${emp.employeeId})</span></td>
+                        <td class="py-3 px-4 font-medium text-gray-900">${escapeHtml(emp.name)} <span class="text-xs text-gray-400">(${escapeHtml(emp.employeeId)})</span></td>
                         <td class="py-3 px-4">$${emp.payRate.toFixed(2)}/hr</td>
                         <td class="py-3 px-4">${emp.approvedHours.toFixed(1)} hrs</td>
                         <td class="py-3 px-4 font-semibold text-gray-800">$${emp.approvedGrossPay.toFixed(2)}</td>
                         <td class="py-3 px-4 text-right">
-                            <button onclick="openPayrollPaymentModal('${emp.employeeId}', '${emp.name.replace(/'/g, "\\'")}', ${emp.approvedGrossPay})" ${emp.approvedHours === 0 ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white font-medium rounded-lg shadow-sm">Mark Paid</button>
+                            <button onclick="openPayrollPaymentModal('${escapeJsStr(emp.employeeId)}', '${escapeJsStr(emp.name)}', ${emp.approvedGrossPay})" ${emp.approvedHours === 0 ? 'disabled' : ''} class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white font-medium rounded-lg shadow-sm">Mark Paid</button>
                         </td>
                     </tr>
                 `);
@@ -982,7 +1006,7 @@
                     <div class="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between space-y-3">
                         <div class="flex justify-between items-start">
                             <div>
-                                <h3 class="font-bold text-gray-900 text-base">${prop.propertyId}</h3>
+                                <h3 class="font-bold text-gray-900 text-base">${escapeHtml(prop.propertyId)}</h3>
                                 <p class="text-xs text-gray-500">${prop.unbilledHours.toFixed(1)} unbilled hrs</p>
                             </div>
                             <span class="text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">$${prop.totalUnbilled.toFixed(2)}</span>
@@ -991,7 +1015,7 @@
                             <div class="flex justify-between"><span>Labor:</span><span>$${prop.unbilledLaborCost.toFixed(2)}</span></div>
                             <div class="flex justify-between"><span>Materials:</span><span>$${prop.unbilledMaterialsCost.toFixed(2)}</span></div>
                         </div>
-                        <button onclick="openInvoiceReport('${prop.propertyId}')" class="w-full text-xs py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm flex justify-center items-center gap-1">
+                        <button onclick="openInvoiceReport('${escapeJsStr(prop.propertyId)}')" class="w-full text-xs py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm flex justify-center items-center gap-1">
                             <i class="fas fa-receipt"></i> Generate Invoice Report
                         </button>
                     </div>
@@ -1006,6 +1030,7 @@
         google.script.run
             .withSuccessHandler(function(rates) {
                 tbody.innerHTML = '';
+                billingRatesCache = rates || [];
                 if (!rates || rates.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">No custom billing rates configured.</td></tr>';
                     return;
@@ -1013,12 +1038,12 @@
                 rates.forEach(rate => {
                     tbody.insertAdjacentHTML('beforeend', `
                         <tr class="hover:bg-gray-50 border-b">
-                            <td class="py-3 px-4 font-medium">${rate.taskName} <span class="text-xs text-gray-400 font-normal">(${rate.taskId})</span></td>
-                            <td class="py-3 px-4">${rate.employeeName} <span class="text-xs text-gray-400">(${rate.employeeId})</span></td>
+                            <td class="py-3 px-4 font-medium">${escapeHtml(rate.taskName)} <span class="text-xs text-gray-400 font-normal">(${escapeHtml(rate.taskId)})</span></td>
+                            <td class="py-3 px-4">${escapeHtml(rate.employeeName)} <span class="text-xs text-gray-400">(${escapeHtml(rate.employeeId)})</span></td>
                             <td class="py-3 px-4 text-right font-semibold text-gray-900">$${parseFloat(rate.rate).toFixed(2)}</td>
                             <td class="py-3 px-4 text-center">
-                                <button onclick='editRate(${JSON.stringify(rate).replace(/'/g, "&#39;")})' class="text-blue-600 hover:text-blue-800 mr-3"><i class="fas fa-edit"></i></button>
-                                <button onclick="deleteRate('${rate.rateId}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                                <button onclick="editRateById('${escapeJsStr(rate.rateId)}')" class="text-blue-600 hover:text-blue-800 mr-3"><i class="fas fa-edit"></i></button>
+                                <button onclick="deleteRate('${escapeJsStr(rate.rateId)}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
                             </td>
                         </tr>
                     `);
@@ -1037,6 +1062,11 @@
         const modal = document.getElementById('rate-modal');
         modal.classList.remove('hidden');
         setTimeout(() => { modal.classList.remove('opacity-0'); modal.querySelector('div').classList.remove('scale-95'); }, 10);
+    }
+
+    function editRateById(rateId) {
+        const rate = billingRatesCache.find(r => r.rateId === rateId);
+        if (rate) editRate(rate);
     }
 
     function editRate(rate) {
@@ -1246,10 +1276,10 @@
                     inv.laborItems.forEach(item => {
                         laborTbody.insertAdjacentHTML('beforeend', `
                             <tr>
-                                <td class="p-2 border-b text-xs">${item.dateCompleted}</td>
-                                <td class="p-2 border-b text-xs font-medium">${item.employeeName}</td>
-                                <td class="p-2 border-b text-xs">${item.taskId} - ${item.workNotes}</td>
-                                <td class="p-2 border-b text-xs font-medium">${item.chargeTarget || 'Owner'}</td>
+                                <td class="p-2 border-b text-xs">${escapeHtml(item.dateCompleted)}</td>
+                                <td class="p-2 border-b text-xs font-medium">${escapeHtml(item.employeeName)}</td>
+                                <td class="p-2 border-b text-xs">${escapeHtml(item.taskId)} - ${escapeHtml(item.workNotes)}</td>
+                                <td class="p-2 border-b text-xs font-medium">${escapeHtml(item.chargeTarget || 'Owner')}</td>
                                 <td class="p-2 border-b text-xs text-right">${item.hoursWorked}</td>
                                 <td class="p-2 border-b text-xs text-right font-medium">$${item.billableAmount !== undefined ? item.billableAmount.toFixed(2) : (item.grossPay || 0).toFixed(2)}</td>
                             </tr>
@@ -1263,11 +1293,11 @@
                     matTbody.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-gray-400">No material expenses.</td></tr>';
                 } else {
                     inv.materialItems.forEach(mat => {
-                        const receiptBtn = mat.receiptUrl ? `<a href="${mat.receiptUrl}" target="_blank" class="text-xs text-blue-600 hover:underline"><i class="fas fa-paperclip mr-1"></i>View</a>` : `<span class="text-xs text-gray-400">None</span>`;
+                        const receiptBtn = mat.receiptUrl ? `<a href="${escapeHtml(mat.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-600 hover:underline"><i class="fas fa-paperclip mr-1"></i>View</a>` : `<span class="text-xs text-gray-400">None</span>`;
                         matTbody.insertAdjacentHTML('beforeend', `
                             <tr>
-                                <td class="p-2 border-b text-xs font-medium">${mat.vendor}</td>
-                                <td class="p-2 border-b text-xs">${mat.description}</td>
+                                <td class="p-2 border-b text-xs font-medium">${escapeHtml(mat.vendor)}</td>
+                                <td class="p-2 border-b text-xs">${escapeHtml(mat.description)}</td>
                                 <td class="p-2 border-b text-xs text-right font-medium">$${mat.cost.toFixed(2)}</td>
                                 <td class="p-2 border-b text-xs text-center">${receiptBtn}</td>
                             </tr>
@@ -1376,11 +1406,11 @@
             const tr = document.createElement('tr');
             tr.className = "border-b hover:bg-gray-50";
             const typeClass = item.type === 'Rent' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
-            let actionBtn = item.type === 'Maintenance' ? `<button onclick="markPropPaid('${item.propertyId}')" class="text-blue-600 hover:text-blue-800 font-medium text-xs border border-blue-600 rounded px-2 py-1">Mark Paid</button>` : '';
+            let actionBtn = item.type === 'Maintenance' ? `<button onclick="markPropPaid('${escapeJsStr(item.propertyId)}')" class="text-blue-600 hover:text-blue-800 font-medium text-xs border border-blue-600 rounded px-2 py-1">Mark Paid</button>` : '';
 
             tr.innerHTML = `
-                <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${typeClass}">${item.type}</span></td>
-                <td class="px-4 py-3 font-medium">${item.propertyId}</td>
+                <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${typeClass}">${escapeHtml(item.type)}</span></td>
+                <td class="px-4 py-3 font-medium">${escapeHtml(item.propertyId)}</td>
                 <td class="px-4 py-3 text-right font-semibold">$${item.amount.toFixed(2)}</td>
                 <td class="px-4 py-3 text-right ${item.daysOverdue > 30 ? 'text-red-600 font-bold' : ''}">${item.daysOverdue} days</td>
                 <td class="px-4 py-3 text-center">${actionBtn}</td>
@@ -1828,10 +1858,10 @@
             tr.className = "hover:bg-gray-50 transition-colors";
 
             let html = `
-                <td class="p-3 text-gray-800 font-medium">${row.property}</td>
-                <td class="p-3 text-gray-600">${row.owner}</td>
-                <td class="p-3 text-gray-600">${row.address}</td>
-                <td class="p-3 text-gray-800">${row.tenantName}</td>
+                <td class="p-3 text-gray-800 font-medium">${escapeHtml(row.property)}</td>
+                <td class="p-3 text-gray-600">${escapeHtml(row.owner)}</td>
+                <td class="p-3 text-gray-600">${escapeHtml(row.address)}</td>
+                <td class="p-3 text-gray-800">${escapeHtml(row.tenantName)}</td>
                 <td class="p-3 text-right font-medium text-gray-900">$${(row.expectedRent||0).toFixed(2)}</td>
             `;
 
@@ -1853,7 +1883,7 @@
 
                     html += `<td class="p-1 text-center">
                         <div class="h-full w-full rounded p-1.5 flex flex-col items-center justify-center ${bgClass}"
-                             onclick="openRentPaymentModal('${row.leaseId}', '${row.tenantId}', '${row.property}', '${row.tenantName}', ${m}, ${expected})">
+                             onclick="openRentPaymentModal('${escapeJsStr(row.leaseId)}', '${escapeJsStr(row.tenantId)}', '${escapeJsStr(row.property)}', '${escapeJsStr(row.tenantName)}', ${m}, ${expected})">
                              <div class="font-medium">$${paid.toFixed(0)}</div>
                              ${diffText}
                         </div>
@@ -1871,7 +1901,7 @@
         document.getElementById('rt-month').value = monthIndex;
         document.getElementById('rt-year').value = currentRentRollYear;
         const monthName = new Date(currentRentRollYear, monthIndex, 1).toLocaleString('default', { month: 'long' });
-        document.getElementById('rt-tenant-prop-desc').innerHTML = `<strong>${tenantName}</strong> at <strong>${propertyName}</strong><br><span class="text-xs text-gray-500">Rent for ${monthName} ${currentRentRollYear}</span>`;
+        document.getElementById('rt-tenant-prop-desc').innerHTML = `<strong>${escapeHtml(tenantName)}</strong> at <strong>${escapeHtml(propertyName)}</strong><br><span class="text-xs text-gray-500">Rent for ${escapeHtml(monthName)} ${currentRentRollYear}</span>`;
         document.getElementById('rt-payment-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('rt-payment-amount').value = expectedRent.toFixed(2);
         document.getElementById('rt-payment-mode').value = "";
@@ -1929,12 +1959,12 @@
         }
         tbody.innerHTML = properties.map(p => `
             <tr class="hover:bg-gray-50 transition-colors">
-                <td class="py-3 px-4 text-gray-800 font-medium">${p.propertyName}</td>
-                <td class="py-3 px-4 text-gray-600">${p.ownerCompany || ''}</td>
-                <td class="py-3 px-4 text-gray-600">${p.address || ''}</td>
+                <td class="py-3 px-4 text-gray-800 font-medium">${escapeHtml(p.propertyName)}</td>
+                <td class="py-3 px-4 text-gray-600">${escapeHtml(p.ownerCompany || '')}</td>
+                <td class="py-3 px-4 text-gray-600">${escapeHtml(p.address || '')}</td>
                 <td class="py-3 px-4 text-center">
-                    <button onclick="editProperty('${p.propertyName}', '${p.ownerCompany || ''}', '${p.address || ''}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
-                    <button onclick="deleteProperty('${p.propertyName}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                    <button onclick="editProperty('${escapeJsStr(p.propertyName)}', '${escapeJsStr(p.ownerCompany || '')}', '${escapeJsStr(p.address || '')}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
+                    <button onclick="deleteProperty('${escapeJsStr(p.propertyName)}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('');
@@ -1978,13 +2008,13 @@
         if (payload.oldPropertyName) {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
-                if (res.success) { closePropertyModal(); showToast("Success", res.message, "success"); loadProperties(); } 
+                if (res.success) { closePropertyModal(); showToast("Success", res.message, "success"); loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Property</span>'; showToast("Error", err.message, "error"); }).updateProperty(payload);
         } else {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Property</span>';
-                if (res.success) { closePropertyModal(); showToast("Success", res.message, "success"); loadProperties(); } 
+                if (res.success) { closePropertyModal(); showToast("Success", res.message, "success"); loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Property</span>'; showToast("Error", err.message, "error"); }).addProperty(payload);
         }
@@ -1993,7 +2023,7 @@
     function deleteProperty(name) {
         if (confirm(`Are you sure you want to delete property: ${name}?`)) {
             google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadProperties(); } 
+                if (res.success) { showToast("Success", res.message, "success"); loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteProperty(name);
         }
@@ -2015,15 +2045,15 @@
         }
         tbody.innerHTML = employees.map(e => `
             <tr class="hover:bg-gray-50 transition-colors">
-                <td class="py-3 px-4 text-gray-800 font-medium">${e.employeeId}</td>
-                <td class="py-3 px-4 text-gray-800">${e.fullName}</td>
-                <td class="py-3 px-4 text-gray-600">${e.email}</td>
+                <td class="py-3 px-4 text-gray-800 font-medium">${escapeHtml(e.employeeId)}</td>
+                <td class="py-3 px-4 text-gray-800">${escapeHtml(e.fullName)}</td>
+                <td class="py-3 px-4 text-gray-600">${escapeHtml(e.email)}</td>
                 <td class="py-3 px-4 text-gray-600">$${parseFloat(e.hourlyPayRate||0).toFixed(2)}</td>
-                <td class="py-3 px-4 text-gray-600">${e.role}</td>
-                <td class="py-3 px-4"><span class="px-2 py-1 text-xs font-semibold rounded-full ${e.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${e.status}</span></td>
+                <td class="py-3 px-4 text-gray-600">${escapeHtml(e.role)}</td>
+                <td class="py-3 px-4"><span class="px-2 py-1 text-xs font-semibold rounded-full ${e.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${escapeHtml(e.status)}</span></td>
                 <td class="py-3 px-4 text-center">
-                    <button onclick="editEmployee('${e.employeeId}', '${e.fullName}', '${e.email}', '${e.hourlyPayRate}', '${e.role}', '${e.phoneNumber}', '${e.status}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
-                    <button onclick="deleteEmployee('${e.employeeId}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                    <button onclick="editEmployee('${escapeJsStr(e.employeeId)}', '${escapeJsStr(e.fullName)}', '${escapeJsStr(e.email)}', '${escapeJsStr(e.hourlyPayRate)}', '${escapeJsStr(e.role)}', '${escapeJsStr(e.phoneNumber)}', '${escapeJsStr(e.status)}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
+                    <button onclick="deleteEmployee('${escapeJsStr(e.employeeId)}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('');
@@ -2078,13 +2108,13 @@
         if (isEdit) {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
-                if (res.success) { closeEmployeeModal(); showToast("Success", res.message, "success"); loadEmployees(); } 
+                if (res.success) { closeEmployeeModal(); showToast("Success", res.message, "success"); loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>'; showToast("Error", err.message, "error"); }).updateEmployee(payload);
         } else {
             google.script.run.withSuccessHandler(res => {
                 btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>';
-                if (res.success) { closeEmployeeModal(); showToast("Success", res.message, "success"); loadEmployees(); } 
+                if (res.success) { closeEmployeeModal(); showToast("Success", res.message, "success"); loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => { btn.disabled = false; btn.innerHTML = '<span>Save Employee</span>'; showToast("Error", err.message, "error"); }).addEmployee(payload);
         }
@@ -2093,7 +2123,7 @@
     function deleteEmployee(id) {
         if (confirm(`Are you sure you want to delete employee: ${id}?`)) {
             google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadEmployees(); } 
+                if (res.success) { showToast("Success", res.message, "success"); loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
                 else showToast("Error", res.error, "error");
             }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteEmployee(id);
         }
@@ -2115,10 +2145,10 @@
         }
         tbody.innerHTML = tasks.map(t => `
             <tr class="hover:bg-gray-50 transition-colors">
-                <td class="py-3 px-4 text-gray-800 font-medium">${t.taskName}</td>
+                <td class="py-3 px-4 text-gray-800 font-medium">${escapeHtml(t.taskName)}</td>
                 <td class="py-3 px-4 text-center">
-                    <button onclick="editTask('${t.taskName}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
-                    <button onclick="deleteTask('${t.taskName}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                    <button onclick="editTask('${escapeJsStr(t.taskName)}')" class="text-blue-500 hover:text-blue-700 mr-2"><i class="fas fa-edit"></i></button>
+                    <button onclick="deleteTask('${escapeJsStr(t.taskName)}')" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('');
