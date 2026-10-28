@@ -1300,7 +1300,6 @@
                 btn.disabled = false;
                 if(!res.success) { showToast('Export Error', res.error, 'error'); return; }
 
-                document.getElementById('link-doc-url').href = res.docUrl;
                 document.getElementById('link-pdf-url').href = res.pdfUrl;
                 document.getElementById('export-links-container').classList.remove('hidden');
 
@@ -1604,7 +1603,6 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 if (res.success) {
-                    document.getElementById('os-link-doc').href = res.docUrl;
                     document.getElementById('os-link-pdf').href = res.pdfUrl;
                     document.getElementById('os-links-container').classList.remove('hidden');
 
@@ -1694,7 +1692,6 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 if (res.success) {
-                    document.getElementById('sd-link-doc').href = res.docUrl;
                     document.getElementById('sd-link-pdf').href = res.pdfUrl;
                     document.getElementById('sd-links-container').classList.remove('hidden');
 
@@ -2186,7 +2183,7 @@
         rates: { title: "Bulk Add Billing Rates", functionName: "addBillingRatesBulk", columns: [ { key: "taskId", label: "Task ID (or Name)*", type: "text", required: true }, { key: "employeeId", label: "Employee ID (or Name)*", type: "text", required: true }, { key: "rate", label: "Hourly Bill Rate ($)*", type: "number", required: true, step: "0.01", min: "0" } ] },
         properties: { title: "Bulk Add Properties", functionName: "addPropertiesBulk", columns: [ { key: "propertyName", label: "Property Name*", type: "text", required: true }, { key: "ownerCompany", label: "Owner/Company", type: "text", required: false }, { key: "address", label: "Address", type: "text", required: false } ] },
         employees: { title: "Bulk Add Employees", functionName: "addEmployeesBulk", columns: [ { key: "employeeId", label: "Employee ID (blank for auto)", type: "text", required: false }, { key: "fullName", label: "Full Name*", type: "text", required: true }, { key: "email", label: "Email*", type: "email", required: true }, { key: "phoneNumber", label: "Phone Number", type: "text", required: false }, { key: "hourlyPayRate", label: "Hourly Pay Rate ($)*", type: "number", required: true, step: "0.01", min: "0" }, { key: "role", label: "Role", type: "select", options: ["Field Crew", "Admin", "Owner"], default: "Field Crew" }, { key: "status", label: "Status", type: "select", options: ["Active", "Inactive"], default: "Active" } ] },
-        tasks: { title: "Bulk Add Task Categories", functionName: "addTasksBulk", columns: [ { key: "taskName", label: "Task Name*", type: "text", required: true }, { key: "description", label: "Description", type: "text", required: false }, { key: "isBillable", label: "Is Billable?", type: "select", options: ["Yes", "No"], default: "Yes" } ] }
+        tasks: { title: "Bulk Add Task Categories", functionName: "addTasksBulk", columns: [ { key: "taskName", label: "Task Name*", type: "text", required: true } ] }
     };
 
     function openBulkAddModal(entityType) {
@@ -2280,8 +2277,8 @@
             }
         });
 
-        if (hasError) { showToast("Please fill in all required fields for non-empty rows.", "error"); return; }
-        if (payloads.length === 0) { showToast("No data to save.", "warning"); return; }
+        if (hasError) { showToast("Validation Error", "Please fill in all required fields for non-empty rows.", "error"); return; }
+        if (payloads.length === 0) { showToast("Notice", "No data to save.", "error"); return; }
 
         const btn = document.getElementById('submit-bulk-btn');
         const originalText = btn.innerHTML;
@@ -2302,19 +2299,19 @@
             btn.innerHTML = originalText;
             btn.disabled = false;
             if (res.success) {
-                showToast(res.message, 'success');
+                showToast("Success", res.message, 'success');
                 closeBulkAddModal();
                 if (entityType === 'rates') loadRates();
-                if (entityType === 'properties') loadProperties();
-                if (entityType === 'employees') loadEmployees();
-                if (entityType === 'tasks') loadTasks();
-            } else showToast("Error: " + res.error, 'error');
+                if (entityType === 'properties') { loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
+                if (entityType === 'employees') { loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
+                if (entityType === 'tasks') { loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
+            } else showToast("Error", res.error, 'error');
         }
 
         function handleBulkErr(err) {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            showToast("Connection error: " + err.message, "error");
+            showToast("Connection Error", err.message, "error");
         }
     }
 </script>

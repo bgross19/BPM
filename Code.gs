@@ -166,6 +166,32 @@ function getOrCreateReceiptsFolder() {
   return newFolder;
 }
 
+// Helper to get or create Google Drive folder for exported PDFs
+function getOrCreateExportsFolder() {
+  var folderName = "BPM Invoices & Settlements";
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty('EXPORTS_FOLDER_ID');
+
+  if (folderId) {
+    try {
+      return DriveApp.getFolderById(folderId);
+    } catch (e) {
+      // Folder might have been deleted, proceed to search by name
+    }
+  }
+
+  var folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    var folder = folders.next();
+    props.setProperty('EXPORTS_FOLDER_ID', folder.getId());
+    return folder;
+  }
+
+  var newFolder = DriveApp.createFolder(folderName);
+  props.setProperty('EXPORTS_FOLDER_ID', newFolder.getId());
+  return newFolder;
+}
+
 // 3. SUBMIT WORK LOG TO SHEETS
 // This is called from the HTML file via google.script.run.submitWorkLog(payload)
 function submitWorkLog(payload) {
@@ -543,13 +569,13 @@ function exportOwnerSettlementPDF(propertyId, monthYear, managementFeePercent) {
     var docFile = DriveApp.getFileById(doc.getId());
     var pdfBlob = docFile.getAs('application/pdf');
     pdfBlob.setName(docTitle + ".pdf");
-    var pdfFile = DriveApp.createFile(pdfBlob);
+    var exportsFolder = getOrCreateExportsFolder();
+    var pdfFile = exportsFolder.createFile(pdfBlob);
     var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
     docFile.setTrashed(true);
 
     return {
       success: true,
-      docUrl: docFile.getUrl(),
       pdfUrl: pdfFile.getUrl(),
       fileName: docTitle + ".pdf",
       base64Pdf: base64Pdf
@@ -628,13 +654,13 @@ function exportSecurityDepositSettlementPDF(leaseId, waivedLateFees) {
     var docFile = DriveApp.getFileById(doc.getId());
     var pdfBlob = docFile.getAs('application/pdf');
     pdfBlob.setName(docTitle + ".pdf");
-    var pdfFile = DriveApp.createFile(pdfBlob);
+    var exportsFolder = getOrCreateExportsFolder();
+    var pdfFile = exportsFolder.createFile(pdfBlob);
     var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
     docFile.setTrashed(true);
 
     return {
       success: true,
-      docUrl: docFile.getUrl(),
       pdfUrl: pdfFile.getUrl(),
       fileName: docTitle + ".pdf",
       base64Pdf: base64Pdf
@@ -1560,11 +1586,12 @@ function exportInvoicePDF(propertyId) {
 
     doc.saveAndClose();
 
-    // Convert Doc to PDF Blob and Save File in Drive
+    // Convert Doc to PDF Blob and Save File in Drive folder
     var docFile = DriveApp.getFileById(doc.getId());
     var pdfBlob = docFile.getAs('application/pdf');
     pdfBlob.setName(docTitle + ".pdf");
-    var pdfFile = DriveApp.createFile(pdfBlob);
+    var exportsFolder = getOrCreateExportsFolder();
+    var pdfFile = exportsFolder.createFile(pdfBlob);
 
     // Encode PDF bytes to base64 for browser client download
     var base64Pdf = Utilities.base64Encode(pdfBlob.getBytes());
@@ -1574,7 +1601,6 @@ function exportInvoicePDF(propertyId) {
 
     return {
       success: true,
-      docUrl: docFile.getUrl(), // Might be inaccessible since trashed, but leaving for legacy reasons
       pdfUrl: pdfFile.getUrl(),
       fileName: docTitle + ".pdf",
       base64Pdf: base64Pdf
@@ -3045,19 +3071,17 @@ function addTasksBulk(payloads) {
   if (!_isAdminOrOwner()) return { success: false, error: 'Unauthorized' };
   try {
     var ss = getSpreadsheet();
-    var sheet = ss.getSheetByName('dim_Task_Categories');
-    if (!sheet) throw new Error("dim_Task_Categories sheet not found");
+    var sheet = ss.getSheetByName('Tasks');
+    if (!sheet) throw new Error("Tasks sheet not found");
 
     if (!payloads || payloads.length === 0) return { success: true, message: "No data to add" };
 
     var rows = [];
     for (var i = 0; i < payloads.length; i++) {
       var p = payloads[i];
-      rows.push([
-        p.taskName,
-        p.description || "",
-        p.isBillable ? "Yes" : "No"
-      ]);
+      if (p.taskName) {
+        rows.push([p.taskName]);
+      }
     }
 
     if (rows.length > 0) {
