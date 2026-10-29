@@ -268,6 +268,23 @@
         const btnRefreshApprovals = document.getElementById('btn-refresh-approvals');
         if (btnRefreshApprovals) btnRefreshApprovals.addEventListener('click', loadAdminDashboardData);
 
+        const btnJumpPendingApprovals = document.getElementById('btn-jump-pending-approvals');
+        if (btnJumpPendingApprovals) {
+            btnJumpPendingApprovals.addEventListener('click', () => {
+                document.getElementById('payroll-status-filter').value = 'Pending';
+                document.getElementById('billing-status-filter').value = 'Pending';
+                switchTab('billing-view');
+                const card = document.getElementById('work-log-approval-card');
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
+        const approvalSearchInput = document.getElementById('approval-search-input');
+        if (approvalSearchInput) approvalSearchInput.addEventListener('input', renderWorkLogsTable);
+
+        const approvalTargetFilter = document.getElementById('approval-target-filter');
+        if (approvalTargetFilter) approvalTargetFilter.addEventListener('change', renderWorkLogsTable);
+
         const selectAllApprovals = document.getElementById('select-all-approvals');
         if (selectAllApprovals) selectAllApprovals.addEventListener('change', toggleAllApprovalCheckboxes);
 
@@ -334,6 +351,12 @@
 
         const ledgerLeaseSelect = document.getElementById('ledger-lease-select');
         if (ledgerLeaseSelect) ledgerLeaseSelect.addEventListener('change', updateTenantDropdownAndBalance);
+
+        const osPropertyInput = document.getElementById('os-property');
+        if (osPropertyInput) {
+            osPropertyInput.addEventListener('change', autoFillOwnerSettlementFee);
+            osPropertyInput.addEventListener('input', autoFillOwnerSettlementFee);
+        }
 
         // Sub tabs
         const tabRentTrackingSub = document.getElementById('tab-rent-tracking-sub');
@@ -436,6 +459,8 @@
             document.getElementById('tab-lease-view').classList.remove('hidden');
             document.getElementById('tab-settings-view').classList.remove('hidden');
             document.getElementById('charge-target-container').classList.remove('hidden');
+            const editChargeContainer = document.getElementById('edit-charge-target-container');
+            if (editChargeContainer) editChargeContainer.classList.remove('hidden');
             if (role === 'owner') dashTab.classList.remove('hidden');
             else dashTab.classList.add('hidden');
             
@@ -448,6 +473,8 @@
             document.getElementById('tab-lease-view').classList.add('hidden');
             document.getElementById('tab-settings-view').classList.add('hidden');
             document.getElementById('charge-target-container').classList.add('hidden');
+            const editChargeContainer = document.getElementById('edit-charge-target-container');
+            if (editChargeContainer) editChargeContainer.classList.add('hidden');
         }
     }
 
@@ -580,9 +607,62 @@
         executeSubmission();
     }
 
-    function showWarningModal(propertyName) {
+    let pendingConfirmCallback = null;
+    let isUnlistedPropertyModal = false;
+
+    function showConfirmModal(title, message, confirmLabel, onConfirm, isDanger = true) {
+        isUnlistedPropertyModal = false;
+        pendingConfirmCallback = onConfirm;
         const modal = document.getElementById('confirmation-modal');
-        document.getElementById('unlisted-prop-name').innerText = `"${propertyName}"`;
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('modal-text');
+        const cancelBtn = document.getElementById('btn-cancel-warning');
+        const proceedBtn = document.getElementById('btn-proceed-warning');
+        const headerEl = document.getElementById('confirm-modal-header');
+
+        if (titleEl) titleEl.innerText = title;
+        if (textEl) textEl.innerText = message;
+        if (cancelBtn) cancelBtn.innerText = 'Cancel';
+        if (proceedBtn) {
+            proceedBtn.innerText = confirmLabel || 'Confirm';
+            proceedBtn.className = isDanger
+                ? 'px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium shadow-sm transition-colors'
+                : 'px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors';
+        }
+        if (headerEl) {
+            headerEl.className = isDanger ? 'flex items-center gap-3 text-red-600 mb-4' : 'flex items-center gap-3 text-blue-600 mb-4';
+        }
+
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            document.getElementById('modal-content').classList.remove('scale-95');
+        }, 10);
+    }
+
+    function showWarningModal(propertyName) {
+        isUnlistedPropertyModal = true;
+        pendingConfirmCallback = null;
+        const modal = document.getElementById('confirmation-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('modal-text');
+        const cancelBtn = document.getElementById('btn-cancel-warning');
+        const proceedBtn = document.getElementById('btn-proceed-warning');
+        const headerEl = document.getElementById('confirm-modal-header');
+
+        if (titleEl) titleEl.innerText = 'Unlisted Property';
+        if (textEl) {
+            textEl.innerHTML = `The property <span id="unlisted-prop-name" class="font-bold">"${escapeHtml(propertyName)}"</span> is not in our standard database. Are you sure you want to log hours to this new location?`;
+        }
+        if (cancelBtn) cancelBtn.innerText = 'No, fix it';
+        if (proceedBtn) {
+            proceedBtn.innerText = 'Yes, submit anyway';
+            proceedBtn.className = 'px-4 py-2 text-white bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-medium shadow-sm transition-colors';
+        }
+        if (headerEl) {
+            headerEl.className = 'flex items-center gap-3 text-yellow-600 mb-4';
+        }
+
         modal.classList.remove('hidden');
         setTimeout(() => {
             modal.classList.remove('opacity-0');
@@ -594,10 +674,18 @@
         const modal = document.getElementById('confirmation-modal');
         modal.classList.add('opacity-0');
         document.getElementById('modal-content').classList.add('scale-95');
+        const cb = pendingConfirmCallback;
+        const wasPropWarning = isUnlistedPropertyModal;
+        pendingConfirmCallback = null;
+        isUnlistedPropertyModal = false;
         setTimeout(() => {
             modal.classList.add('hidden');
-            if (proceed) { bypassPropertyWarning = true; executeSubmission(); } 
-            else document.getElementById('log-property').focus();
+            if (wasPropWarning) {
+                if (proceed) { bypassPropertyWarning = true; executeSubmission(); } 
+                else document.getElementById('log-property').focus();
+            } else if (proceed && typeof cb === 'function') {
+                cb();
+            }
         }, 300);
     }
 
@@ -866,6 +954,8 @@
         document.getElementById('edit-log-task').value = punch.taskId;
         document.getElementById('edit-log-hours').value = punch.hoursWorked;
         document.getElementById('edit-log-notes').value = punch.workNotes;
+        const editTargetEl = document.getElementById('edit-log-charge-target');
+        if (editTargetEl) editTargetEl.value = punch.chargeTarget || 'Owner';
         populateEditModalMaterials(punch);
 
         const modal = document.getElementById('edit-punch-modal');
@@ -883,6 +973,8 @@
         document.getElementById('edit-log-task').value = punch.taskId;
         document.getElementById('edit-log-hours').value = punch.hoursWorked;
         document.getElementById('edit-log-notes').value = punch.workNotes;
+        const editTargetEl = document.getElementById('edit-log-charge-target');
+        if (editTargetEl) editTargetEl.value = punch.chargeTarget || 'Owner';
         populateEditModalMaterials(punch);
 
         const modal = document.getElementById('edit-punch-modal');
@@ -904,6 +996,7 @@
         btn.innerText = "Saving...";
         btn.disabled = true;
 
+        const editTargetEl = document.getElementById('edit-log-charge-target');
         const payload = {
             workLogId: document.getElementById('edit-work-log-id').value,
             date: document.getElementById('edit-log-date').value,
@@ -911,6 +1004,7 @@
             taskId: document.getElementById('edit-log-task').value.trim(),
             hours: parseFloat(document.getElementById('edit-log-hours').value),
             notes: document.getElementById('edit-log-notes').value,
+            chargeTarget: (currentRole === 'admin' || currentRole === 'owner') && editTargetEl ? editTargetEl.value : undefined,
             newMaterials: []
         };
 
@@ -1091,10 +1185,25 @@
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
         toggleApproveAllBtn();
 
-        if(!currentAdminWorkLogs || currentAdminWorkLogs.length === 0) {
+        const searchEl = document.getElementById('approval-search-input');
+        const targetFilterEl = document.getElementById('approval-target-filter');
+        const searchQuery = searchEl ? searchEl.value.trim().toLowerCase() : '';
+        const targetFilter = targetFilterEl ? targetFilterEl.value : 'All';
+
+        const filteredLogs = (currentAdminWorkLogs || []).filter(log => {
+            const logTarget = (log.chargeTarget || 'Owner').trim();
+            if (targetFilter !== 'All' && logTarget !== targetFilter) return false;
+            if (searchQuery) {
+                const haystack = `${log.employeeName || ''} ${log.propertyId || ''} ${log.taskId || ''} ${log.workNotes || ''} ${log.dateCompleted || ''}`.toLowerCase();
+                if (!haystack.includes(searchQuery)) return false;
+            }
+            return true;
+        });
+
+        if(filteredLogs.length === 0) {
             approvalTbody.innerHTML = '<tr><td colspan="10" class="py-6 text-center text-gray-400">No work logs found for selected filters.</td></tr>';
         } else {
-            currentAdminWorkLogs.forEach(log => {
+            filteredLogs.forEach(log => {
                 const statusLower = log.payrollStatus.toLowerCase();
                 let badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                 if(statusLower === 'approved') badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
@@ -1105,6 +1214,7 @@
                 const isApprovedOrPaid = statusLower === 'approved' || statusLower === 'paid';
                 const amountVal = log.billableAmount !== undefined ? log.billableAmount.toFixed(2) : (log.grossPay || 0).toFixed(2);
                 const originalAmount = log.originalBillableAmount !== undefined ? log.originalBillableAmount.toFixed(2) : (log.grossPay || 0).toFixed(2);
+                const curTarget = log.chargeTarget || 'Owner';
 
                 approvalTbody.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-gray-50 border-b">
@@ -1123,16 +1233,22 @@
                                 <button type="button" title="Revert to calculated amount ($${originalAmount})" onclick="revertCustomChargeAmount('${escapeJsStr(log.workLogId)}', this, ${originalAmount})" class="text-gray-400 hover:text-blue-600 p-1"><i class="fas fa-undo-alt text-xs"></i></button>
                             </div>
                         </td>
-                        <td class="py-3 px-4 font-medium">${escapeHtml(log.chargeTarget || 'Owner')}</td>
+                        <td class="py-3 px-4">
+                            <select onchange="saveChargeTarget('${escapeJsStr(log.workLogId)}', this)" class="text-xs border border-gray-300 rounded p-1 bg-white focus:ring-1 focus:ring-blue-500 outline-none font-medium text-gray-700">
+                                <option value="Owner" ${curTarget === 'Owner' ? 'selected' : ''}>Owner</option>
+                                <option value="Security Deposit" ${curTarget === 'Security Deposit' ? 'selected' : ''}>Security Deposit</option>
+                                <option value="Overhead" ${curTarget === 'Overhead' ? 'selected' : ''}>Overhead</option>
+                            </select>
+                        </td>
                         <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full border text-xs font-semibold ${badgeClass}">${escapeHtml(log.payrollStatus)}</span></td>
                         <td class="py-3 px-4 text-right">
                             <div class="flex justify-end gap-1">
                                 <button onclick="openEditAdminModal('${escapeJsStr(log.workLogId)}')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs"><i class="fas fa-edit"></i> Edit</button>
                                 ${statusLower === 'approved'
-                                    ? `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Pending')" class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded text-xs">Unapprove</button>`
-                                    : `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Approved')" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>`
+                                    ? `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Pending', this)" class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded text-xs">Unapprove</button>`
+                                    : `<button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Approved', this)" ${isApprovedOrPaid ? 'disabled' : ''} class="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Approve</button>`
                                 }
-                                <button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Rejected')" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
+                                <button onclick="setApprovalStatus('${escapeJsStr(log.workLogId)}', 'Rejected', this)" ${statusLower === 'rejected' || isPaid ? 'disabled' : ''} class="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-medium rounded text-xs">Reject</button>
                             </div>
                         </td>
                     </tr>
@@ -1286,15 +1402,21 @@
     }
 
     function deleteRate(rateId) {
-        if (confirm("Are you sure you want to delete this billing rate?")) {
-            google.script.run
-                .withSuccessHandler(res => {
-                    if (res.success) { showToast('Success', 'Rate deleted', 'success'); loadRates(); }
-                    else showToast('Error', res.error, 'error');
-                })
-                .withFailureHandler(err => showToast("Error", err.message, "error"))
-                .deleteBillingRate(rateId);
-        }
+        showConfirmModal(
+            "Delete Billing Rate",
+            "Are you sure you want to delete this billing rate?",
+            "Delete Rate",
+            () => {
+                google.script.run
+                    .withSuccessHandler(res => {
+                        if (res.success) { showToast('Success', 'Rate deleted', 'success'); loadRates(); }
+                        else showToast('Error', res.error, 'error');
+                    })
+                    .withFailureHandler(err => showToast("Error", err.message, "error"))
+                    .deleteBillingRate(rateId);
+            },
+            true
+        );
     }
 
     function saveCustomChargeAmount(workLogId, inputEl) {
@@ -1364,13 +1486,45 @@
             .bulkUpdateApprovalStatus(ids, 'Approved');
     }
 
-    function setApprovalStatus(workLogId, status) {
+    function saveChargeTarget(workLogId, selectEl) {
+        const newTarget = selectEl.value;
+        selectEl.disabled = true;
+        google.script.run
+            .withSuccessHandler(function(res) {
+                selectEl.disabled = false;
+                if (res.success) {
+                    showToast('Updated', res.message, 'success');
+                    loadAdminDashboardData();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                selectEl.disabled = false;
+                showToast("Error", err.message, "error");
+            })
+            .updateWorkLogChargeTarget(workLogId, newTarget);
+    }
+
+    function setApprovalStatus(workLogId, status, btnEl) {
+        let originalHtml = '';
+        if (btnEl) {
+            originalHtml = btnEl.innerHTML;
+            btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btnEl.disabled = true;
+        }
         google.script.run
             .withSuccessHandler(function(res) {
                 if(res.success) { showToast('Updated', res.message, 'success'); loadAdminDashboardData(); } 
-                else showToast('Error', res.error, 'error');
+                else {
+                    if (btnEl) { btnEl.innerHTML = originalHtml; btnEl.disabled = false; }
+                    showToast('Error', res.error, 'error');
+                }
             })
-            .withFailureHandler(err => showToast("Error", err.message, "error"))
+            .withFailureHandler(err => {
+                if (btnEl) { btnEl.innerHTML = originalHtml; btnEl.disabled = false; }
+                showToast("Error", err.message, "error");
+            })
             .updateApprovalStatus(workLogId, status);
     }
 
@@ -1600,14 +1754,21 @@
     }
 
     function markPropPaid(propertyId) {
-        if (!confirm(`Mark outstanding maintenance for ${propertyId} as PAID?`)) return;
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if(res.success) { showToast('Success', res.message, 'success'); loadDashboardData(); }
-                else showToast("Error", res.error, "error");
-            })
-            .withFailureHandler(err => showToast("Error", err.message, "error"))
-            .markPropertyPaid(propertyId);
+        showConfirmModal(
+            "Mark Maintenance Paid",
+            `Mark all outstanding billed maintenance for "${propertyId}" as PAID?`,
+            "Mark Paid",
+            () => {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if(res.success) { showToast('Success', res.message, 'success'); loadDashboardData(); }
+                        else showToast("Error", res.error, "error");
+                    })
+                    .withFailureHandler(err => showToast("Error", err.message, "error"))
+                    .markPropertyPaid(propertyId);
+            },
+            false
+        );
     }
 
     var globalLeases = [];
@@ -1696,10 +1857,93 @@
                     globalLeases = res.leases || [];
                     globalTenants = res.tenants || [];
                     populateLeaseDropdown();
+                    renderLeasesDirectory();
                 }
             })
             .withFailureHandler(err => console.error("Lease Fetch Error", err))
             .getLeasesAndTenants();
+    }
+
+    function renderLeasesDirectory() {
+        const tbody = document.getElementById('leases-directory-tbody');
+        if (!tbody) return;
+        if (!globalLeases || globalLeases.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-gray-400">No leases found. Create a lease below.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = globalLeases.map(lease => {
+            const leaseTenants = (globalTenants || []).filter(t => t.leaseId === lease.leaseId);
+            const tenantsHtml = leaseTenants.length > 0
+                ? leaseTenants.map(t => `<div><span class="font-medium text-gray-800">${escapeHtml(t.name)}</span> <span class="text-gray-400">(${escapeHtml(t.contactInfo || 'No contact')})</span></div>`).join('')
+                : '<span class="text-gray-400 italic">No tenants listed</span>';
+            const curStatus = lease.status || 'Active';
+            return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 px-3">
+                        <div class="font-semibold text-gray-900">${escapeHtml(lease.propertyId)}</div>
+                        <div class="text-[11px] text-gray-400">${escapeHtml(lease.leaseId)} &bull; Mgmt Fee: ${parseFloat(lease.managementFeePercent || 8).toFixed(1)}%</div>
+                    </td>
+                    <td class="py-3 px-3 whitespace-nowrap text-gray-600">${escapeHtml(lease.startDate)} &rarr; ${escapeHtml(lease.endDate)}</td>
+                    <td class="py-3 px-3 text-right whitespace-nowrap">
+                        <div class="font-semibold text-gray-900">$${parseFloat(lease.monthlyRent || 0).toFixed(2)}/mo</div>
+                        <div class="text-[11px] text-gray-400">Dep: $${parseFloat(lease.securityDeposit || 0).toFixed(2)}</div>
+                    </td>
+                    <td class="py-3 px-3 space-y-0.5">${tenantsHtml}</td>
+                    <td class="py-3 px-3">
+                        <select onchange="changeLeaseStatus('${escapeJsStr(lease.leaseId)}', this)" class="text-xs border border-gray-300 rounded p-1 bg-white font-medium ${curStatus === 'Active' ? 'text-green-700' : 'text-gray-500'}">
+                            <option value="Active" ${curStatus === 'Active' ? 'selected' : ''}>Active</option>
+                            <option value="Ended" ${curStatus === 'Ended' ? 'selected' : ''}>Ended</option>
+                            <option value="Terminated" ${curStatus === 'Terminated' ? 'selected' : ''}>Terminated</option>
+                        </select>
+                    </td>
+                    <td class="py-3 px-3 text-right whitespace-nowrap">
+                        <button type="button" onclick="selectLeaseForLedger('${escapeJsStr(lease.leaseId)}')" class="text-xs px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium rounded border border-blue-200 transition-colors">
+                            View Ledger
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function changeLeaseStatus(leaseId, selectEl) {
+        const newStatus = selectEl.value;
+        selectEl.disabled = true;
+        google.script.run
+            .withSuccessHandler(res => {
+                selectEl.disabled = false;
+                if (res.success) {
+                    showToast('Updated', res.message, 'success');
+                    loadLeasesAndTenants();
+                } else {
+                    showToast('Error', res.error, 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                selectEl.disabled = false;
+                showToast('Error', err.message, 'error');
+            })
+            .updateLeaseStatus(leaseId, newStatus);
+    }
+
+    function selectLeaseForLedger(leaseId) {
+        const select = document.getElementById('ledger-lease-select');
+        if (!select) return;
+        select.value = leaseId;
+        updateTenantDropdownAndBalance();
+        select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function autoFillOwnerSettlementFee() {
+        const propInput = document.getElementById('os-property');
+        const feeInput = document.getElementById('os-fee');
+        if (!propInput || !feeInput) return;
+        const propName = propInput.value.trim();
+        const matchingLease = (globalLeases || []).find(l => l.propertyId === propName && (l.status === 'Active' || !l.status))
+            || (globalLeases || []).find(l => l.propertyId === propName);
+        if (matchingLease && matchingLease.managementFeePercent !== undefined) {
+            feeInput.value = matchingLease.managementFeePercent;
+        }
     }
 
     function populateLeaseDropdown() {
@@ -1746,6 +1990,29 @@
                     document.getElementById('balance-expected-rent').textContent = `$${res.expectedRent.toFixed(2)}`;
                     document.getElementById('balance-total-charges').textContent = `$${res.totalCharges.toFixed(2)}`;
                     document.getElementById('balance-total-payments').textContent = `$${res.totalPayments.toFixed(2)}`;
+
+                    const historyTbody = document.getElementById('lease-ledger-history-tbody');
+                    if (historyTbody) {
+                        const entries = res.ledgerEntries || [];
+                        if (entries.length === 0) {
+                            historyTbody.innerHTML = '<tr><td colspan="5" class="py-3 text-center text-gray-400">No ledger transactions recorded for this lease.</td></tr>';
+                        } else {
+                            historyTbody.innerHTML = entries.map(entry => {
+                                const tenantObj = (globalTenants || []).find(t => t.tenantId === entry.tenantId);
+                                const tenantLabel = tenantObj ? tenantObj.name : (entry.tenantId || '');
+                                const noteParts = [tenantLabel, entry.paymentMode, entry.notes].filter(Boolean);
+                                return `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="py-1.5 px-2.5 whitespace-nowrap">${escapeHtml(entry.date)}</td>
+                                        <td class="py-1.5 px-2.5 font-medium text-gray-800">${escapeHtml(entry.transactionType)}</td>
+                                        <td class="py-1.5 px-2.5 text-right ${entry.chargeAmount > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}">${entry.chargeAmount > 0 ? '$' + entry.chargeAmount.toFixed(2) : '-'}</td>
+                                        <td class="py-1.5 px-2.5 text-right ${entry.paymentAmount > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}">${entry.paymentAmount > 0 ? '$' + entry.paymentAmount.toFixed(2) : '-'}</td>
+                                        <td class="py-1.5 px-2.5 text-gray-500 truncate max-w-xs" title="${escapeHtml(noteParts.join(' • '))}">${escapeHtml(noteParts.join(' • '))}</td>
+                                    </tr>
+                                `;
+                            }).join('');
+                        }
+                    }
                 }
             })
             .calculateLeaseBalance(leaseId);
@@ -2022,7 +2289,7 @@
             tr.className = "hover:bg-gray-50 transition-colors";
 
             let html = `
-                <td class="p-3 text-gray-800 font-medium">${escapeHtml(row.property)}</td>
+                <td class="p-3 text-gray-800 font-medium sticky left-0 z-10 bg-white">${escapeHtml(row.property)}</td>
                 <td class="p-3 text-gray-600">${escapeHtml(row.owner)}</td>
                 <td class="p-3 text-gray-600">${escapeHtml(row.address)}</td>
                 <td class="p-3 text-gray-800">${escapeHtml(row.tenantName)}</td>
@@ -2185,12 +2452,18 @@
     }
 
     function deleteProperty(name) {
-        if (confirm(`Are you sure you want to delete property: ${name}?`)) {
-            google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
-                else showToast("Error", res.error, "error");
-            }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteProperty(name);
-        }
+        showConfirmModal(
+            "Delete Property",
+            `Are you sure you want to delete property "${name}"?`,
+            "Delete Property",
+            () => {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) { showToast("Success", res.message, "success"); loadProperties(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
+                    else showToast("Error", res.error, "error");
+                }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteProperty(name);
+            },
+            true
+        );
     }
 
     function loadEmployees() {
@@ -2285,12 +2558,18 @@
     }
 
     function deleteEmployee(id) {
-        if (confirm(`Are you sure you want to delete employee: ${id}?`)) {
-            google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
-                else showToast("Error", res.error, "error");
-            }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteEmployee(id);
-        }
+        showConfirmModal(
+            "Delete Employee",
+            `Are you sure you want to delete employee "${id}"?`,
+            "Delete Employee",
+            () => {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) { showToast("Success", res.message, "success"); loadEmployees(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); } 
+                    else showToast("Error", res.error, "error");
+                }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteEmployee(id);
+            },
+            true
+        );
     }
 
     function loadTasks() {
@@ -2365,12 +2644,18 @@
     }
 
     function deleteTask(name) {
-        if (confirm(`Are you sure you want to delete task category: ${name}?`)) {
-            google.script.run.withSuccessHandler(res => {
-                if (res.success) { showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
-                else showToast("Error", res.error, "error");
-            }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteTask(name);
-        }
+        showConfirmModal(
+            "Delete Task Category",
+            `Are you sure you want to delete task category "${name}"?`,
+            "Delete Task",
+            () => {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) { showToast("Success", res.message, "success"); loadTasks(); google.script.run.withSuccessHandler(populateDatalists).getDropdownData(); }
+                    else showToast("Error", res.error, "error");
+                }).withFailureHandler(err => showToast("Error", err.message, "error")).deleteTask(name);
+            },
+            true
+        );
     }
 
     const BULK_CONFIG = {

@@ -206,7 +206,7 @@
                             <table class="w-full text-left border-collapse" id="rent-tracking-table">
                                 <thead>
                                     <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider border-b border-t">
-                                        <th id="rt-sort-prop" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Property</th>
+                                        <th id="rt-sort-prop" class="p-3 font-medium cursor-pointer hover:bg-gray-100 sticky left-0 z-10 bg-gray-50">Property</th>
                                         <th id="rt-sort-owner" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Owner/Company</th>
                                         <th id="rt-sort-address" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Address</th>
                                         <th id="rt-sort-tenant" class="p-3 font-medium cursor-pointer hover:bg-gray-100">Tenant Name</th>
@@ -235,6 +235,33 @@
 
                 <!-- SUB-VIEW: LEASE MANAGEMENT -->
                 <div id="lease-management-sub" class="hidden space-y-6">
+                <!-- Active Leases & Tenants Directory -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-4xl mx-auto">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <div>
+                            <h2 class="text-lg font-semibold"><i class="fas fa-building text-blue-600 mr-2"></i>Leases & Tenants Directory</h2>
+                            <p class="text-xs text-gray-500">Overview of all leases, assigned tenants, terms, and status</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-gray-600 border-collapse">
+                            <thead class="bg-gray-50 text-gray-700 uppercase border-b">
+                                <tr>
+                                    <th class="py-2.5 px-3">Property (Lease ID)</th>
+                                    <th class="py-2.5 px-3">Term</th>
+                                    <th class="py-2.5 px-3 text-right">Rent / Deposit</th>
+                                    <th class="py-2.5 px-3">Tenants & Contact</th>
+                                    <th class="py-2.5 px-3">Status</th>
+                                    <th class="py-2.5 px-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leases-directory-tbody" class="divide-y divide-gray-100">
+                                <tr><td colspan="6" class="py-6 text-center text-gray-400">Loading leases...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Create Lease Form -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-2xl mx-auto">
                     <h2 class="text-lg font-semibold mb-4 border-b pb-2"><i class="fas fa-file-contract text-blue-600 mr-2"></i>Create New Lease</h2>
@@ -309,15 +336,36 @@
                     </div>
 
                     <!-- Balance Display (Hidden until lease is selected) -->
-                    <div id="lease-balance-display" class="hidden bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 flex justify-between items-center">
-                        <div>
-                            <p class="text-sm text-gray-500">Current Outstanding Balance</p>
-                            <p class="text-2xl font-bold text-gray-900" id="lease-balance-amount">$0.00</p>
+                    <div id="lease-balance-display" class="hidden bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500">Current Outstanding Balance</p>
+                                <p class="text-2xl font-bold text-gray-900" id="lease-balance-amount">$0.00</p>
+                            </div>
+                            <div class="text-right text-xs text-gray-500 space-y-1">
+                                <p>Expected Rent: <span id="balance-expected-rent" class="font-medium text-gray-700"></span></p>
+                                <p>Total Charges: <span id="balance-total-charges" class="font-medium text-gray-700"></span></p>
+                                <p>Total Payments: <span id="balance-total-payments" class="font-medium text-gray-700"></span></p>
+                            </div>
                         </div>
-                        <div class="text-right text-xs text-gray-500 space-y-1">
-                            <p>Expected Rent: <span id="balance-expected-rent" class="font-medium text-gray-700"></span></p>
-                            <p>Total Charges: <span id="balance-total-charges" class="font-medium text-gray-700"></span></p>
-                            <p>Total Payments: <span id="balance-total-payments" class="font-medium text-gray-700"></span></p>
+                        <div class="border-t border-gray-200 pt-3">
+                            <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Recent Ledger Transactions</h4>
+                            <div class="max-h-48 overflow-y-auto rounded border border-gray-200 bg-white">
+                                <table class="w-full text-left text-xs text-gray-600">
+                                    <thead class="bg-gray-100 text-gray-700 sticky top-0">
+                                        <tr>
+                                            <th class="py-1.5 px-2.5">Date</th>
+                                            <th class="py-1.5 px-2.5">Type</th>
+                                            <th class="py-1.5 px-2.5 text-right">Charge</th>
+                                            <th class="py-1.5 px-2.5 text-right">Payment</th>
+                                            <th class="py-1.5 px-2.5">Notes / Mode</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="lease-ledger-history-tbody" class="divide-y divide-gray-100">
+                                        <tr><td colspan="5" class="py-3 text-center text-gray-400">No ledger transactions recorded.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
@@ -588,7 +636,10 @@
                         <div>
                             <p class="text-xs text-gray-500 font-medium">Pending Approval</p>
                             <h3 class="text-xl font-bold text-yellow-600 mt-1" id="stat-pending-amount">$0.00</h3>
-                            <p class="text-xs text-gray-400 mt-0.5" id="stat-pending-hours">0 hrs</p>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <p class="text-xs text-gray-400" id="stat-pending-hours">0 hrs</p>
+                                <button type="button" id="btn-jump-pending-approvals" class="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline">Review in Approval Center &rarr;</button>
+                            </div>
                         </div>
                         <div class="h-9 w-9 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
                             <i class="fas fa-hourglass-half"></i>
@@ -725,13 +776,20 @@
                 </div>
 
                 <!-- SECTION 1: WORK LOG APPROVAL WORKFLOW -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                <div id="work-log-approval-card" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div>
                             <h2 class="font-semibold text-gray-800"><i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Work Log Approval Center</h2>
-                            <p class="text-xs text-gray-500">Review, approve, or reject logged time entries</p>
+                            <p class="text-xs text-gray-500">Review, approve, reject, or reclassify logged time entries</p>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <input type="text" id="approval-search-input" placeholder="Search worker, property, task..." class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white flex-1 sm:w-48" />
+                            <select id="approval-target-filter" class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="All">All Targets</option>
+                                <option value="Owner">Owner</option>
+                                <option value="Security Deposit">Security Deposit</option>
+                                <option value="Overhead">Overhead</option>
+                            </select>
                             <button id="btn-approve-all" class="hidden text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-1">
                                 <i class="fas fa-check-double"></i> Approve Selected
                             </button>
@@ -808,6 +866,14 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Hours</label>
                         <input type="number" id="edit-log-hours" step="0.25" min="0.25" required class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
+                </div>
+                <div id="edit-charge-target-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Charge Target <span class="text-xs text-gray-500 font-normal">(Admin/Owner)</span></label>
+                    <select id="edit-log-charge-target" class="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        <option value="Owner">Owner Charge</option>
+                        <option value="Security Deposit">Security Deposit Deduction</option>
+                        <option value="Overhead">Overhead</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Work Description</label>
@@ -923,16 +989,16 @@
     <!-- CUSTOM CONFIRMATION MODAL -->
     <div id="confirmation-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 transform scale-95 transition-transform duration-300 p-6" id="modal-content">
-            <div class="flex items-center gap-3 text-yellow-600 mb-4">
-                <i class="fas fa-exclamation-triangle text-2xl"></i>
-                <h3 class="text-lg font-bold text-gray-900">Unlisted Property</h3>
+            <div class="flex items-center gap-3 text-yellow-600 mb-4" id="confirm-modal-header">
+                <i class="fas fa-exclamation-triangle text-2xl" id="confirm-modal-icon"></i>
+                <h3 class="text-lg font-bold text-gray-900" id="confirm-modal-title">Unlisted Property</h3>
             </div>
             <p class="text-gray-600 text-sm mb-6" id="modal-text">
                 The property <span id="unlisted-prop-name" class="font-bold"></span> is not in our standard database. Are you sure you want to log hours to this new location?
             </p>
             <div class="flex justify-end gap-3">
                 <button id="btn-cancel-warning" type="button" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
-                    No, fix it
+                    Cancel
                 </button>
                 <button id="btn-proceed-warning" type="button" class="px-4 py-2 text-white bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-medium shadow-sm transition-colors">
                     Yes, submit anyway
