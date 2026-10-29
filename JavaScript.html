@@ -60,6 +60,11 @@
             btnAddMaterial.addEventListener('click', addMaterialRow);
         }
 
+        const btnEditAddMaterial = document.getElementById('btn-edit-add-material');
+        if (btnEditAddMaterial) {
+            btnEditAddMaterial.addEventListener('click', addEditMaterialRow);
+        }
+
         // Fetch Dropdown Data
         google.script.run
             .withSuccessHandler(populateDatalists)
@@ -82,6 +87,29 @@
                 document.getElementById('user-avatar').innerText = displayName.charAt(0).toUpperCase();
                 
                 applyUserPermissions(userInfo ? userInfo.role : 'employee');
+
+                const statusBanner = document.getElementById('user-status-banner');
+                const submitBtn = document.getElementById('submit-btn');
+                if (userInfo && (userInfo.role === 'inactive' || userInfo.employeeId === 'UNASSIGNED')) {
+                    if (statusBanner) {
+                        statusBanner.classList.remove('hidden');
+                        const titleEl = document.getElementById('user-status-banner-title');
+                        const descEl = document.getElementById('user-status-banner-desc');
+                        if (userInfo.role === 'inactive') {
+                            titleEl.innerText = 'Account Inactive';
+                            descEl.innerText = `Your profile (${userInfo.email || 'current account'}) is currently marked as Inactive. Please contact an Admin to reactivate your account before logging time.`;
+                        } else {
+                            titleEl.innerText = 'Account Not Linked to Employee Profile';
+                            descEl.innerText = `Signed in as ${userInfo.email || 'unrecognized email'}. Your email is not yet listed in BPM Employees — ask an Admin to add your email in Settings → Employees.`;
+                        }
+                    }
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
+                } else if (statusBanner) {
+                    statusBanner.classList.add('hidden');
+                }
             })
             .withFailureHandler(err => {
                 console.error("User Role API Error:", err);
@@ -597,8 +625,10 @@
 
             if (fileInput && fileInput.files && fileInput.files[0]) {
                 const file = fileInput.files[0];
-                fileName = file.name; fileType = file.type;
-                fileData = await readFileAsBase64(file);
+                const processed = await compressReceiptImage(file);
+                fileName = processed.fileName;
+                fileType = processed.fileType;
+                fileData = processed.fileData;
             }
 
             payload.materials.push({
@@ -636,6 +666,49 @@
             reader.onload = () => resolve(reader.result);
             reader.onerror = error => reject(error);
             reader.readAsDataURL(file);
+        });
+    }
+
+    async function compressReceiptImage(file) {
+        const rawDataUrl = await readFileAsBase64(file);
+        const compressibleTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!file.type || !compressibleTypes.includes(file.type.toLowerCase()) || file.size <= 400 * 1024) {
+            return { fileData: rawDataUrl, fileName: file.name, fileType: file.type };
+        }
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const maxDim = 1600;
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                    const baseName = file.name.replace(/\.[^/.]+$/, '');
+                    resolve({
+                        fileData: compressedDataUrl,
+                        fileName: baseName + '.jpg',
+                        fileType: 'image/jpeg'
+                    });
+                } catch (e) {
+                    resolve({ fileData: rawDataUrl, fileName: file.name, fileType: file.type });
+                }
+            };
+            img.onerror = () => resolve({ fileData: rawDataUrl, fileName: file.name, fileType: file.type });
+            img.src = rawDataUrl;
         });
     }
 
@@ -692,6 +765,20 @@
                 if (statusLower === 'rejected') statusClass = 'bg-red-100 text-red-700 border-red-200';
 
                 const isPaid = statusLower === 'paid';
+                const mats = punch.materials || [];
+                let materialsHtml = '';
+                if (mats.length > 0) {
+                    const matItems = mats.map(m => {
+                        const receiptLink = m.receiptUrl
+                            ? `<a href="${escapeHtml(m.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline ml-1"><i class="fas fa-paperclip"></i> Receipt</a>`
+                            : `<span class="text-gray-400 ml-1">(No receipt)</span>`;
+                        return `<div class="text-[11px] text-gray-600 bg-orange-50 border border-orange-100 rounded px-2 py-1 inline-flex items-center gap-1">
+                            <i class="fas fa-shopping-bag text-orange-500"></i>
+                            <span class="font-medium">${escapeHtml(m.vendor)}:</span> ${escapeHtml(m.description)} ($${parseFloat(m.cost || 0).toFixed(2)}) ${receiptLink}
+                        </div>`;
+                    }).join('');
+                    materialsHtml = `<div class="flex flex-wrap gap-1.5 pt-1">${matItems}</div>`;
+                }
 
                 punchesContainer.insertAdjacentHTML('beforeend', `
                     <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-50 transition-colors">
@@ -702,6 +789,7 @@
                             </div>
                             <p class="text-xs text-gray-600"><span class="font-medium text-gray-800">${escapeHtml(punch.taskId)}</span> &bull; ${escapeHtml(punch.workNotes)}</p>
                             <p class="text-xs text-gray-400"><i class="far font-medium fa-calendar mr-1"></i>${escapeHtml(punch.dateCompleted)}</p>
+                            ${materialsHtml}
                         </div>
                         <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 pt-2 sm:pt-0">
                             <span class="font-bold text-gray-800 text-sm">${punch.hoursWorked.toFixed(2)} hrs</span>
@@ -715,6 +803,58 @@
         }
     }
 
+    let editMaterialCount = 0;
+
+    function populateEditModalMaterials(punch) {
+        const existingContainer = document.getElementById('edit-existing-materials');
+        const newContainer = document.getElementById('edit-new-materials-container');
+        if (existingContainer) {
+            const mats = punch.materials || [];
+            if (mats.length === 0) {
+                existingContainer.innerHTML = '<p class="text-xs text-gray-400 italic">No materials logged on this punch.</p>';
+            } else {
+                existingContainer.innerHTML = mats.map(m => {
+                    const link = m.receiptUrl
+                        ? `<a href="${escapeHtml(m.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline"><i class="fas fa-paperclip mr-0.5"></i>Receipt</a>`
+                        : `<span class="text-gray-400">No receipt</span>`;
+                    return `<div class="flex justify-between items-center text-xs bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">
+                        <span><strong>${escapeHtml(m.vendor)}</strong> &bull; ${escapeHtml(m.description)}</span>
+                        <span class="font-medium">$${parseFloat(m.cost || 0).toFixed(2)} &bull; ${link}</span>
+                    </div>`;
+                }).join('');
+            }
+        }
+        if (newContainer) newContainer.innerHTML = '';
+        editMaterialCount = 0;
+    }
+
+    function addEditMaterialRow() {
+        const container = document.getElementById('edit-new-materials-container');
+        if (!container) return;
+        editMaterialCount++;
+        const rowId = `edit-material-row-${editMaterialCount}`;
+        container.insertAdjacentHTML('beforeend', `
+            <div id="${rowId}" class="flex flex-col sm:flex-row gap-2 items-start bg-gray-50 p-2 rounded-lg border border-gray-200">
+                <div class="flex-1 space-y-1.5 w-full">
+                    <select class="w-full rounded border-gray-300 border p-1.5 text-xs focus:ring-blue-500 outline-none edit-material-vendor bg-white" required>
+                        <option value="" disabled selected>Vendor...</option>
+                        <option value="Home Depot">Home Depot</option>
+                        <option value="Lowes">Lowe's</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <input type="text" placeholder="Item description" required class="w-full rounded border-gray-300 border p-1.5 text-xs focus:ring-blue-500 outline-none edit-material-desc" />
+                </div>
+                <div class="w-full sm:w-32 space-y-1.5">
+                    <input type="number" step="0.01" min="0.01" placeholder="$ Cost" required class="w-full rounded border-gray-300 border p-1.5 text-xs focus:ring-blue-500 outline-none edit-material-cost" />
+                    <input type="file" accept="image/*,application/pdf" class="w-full text-[10px] text-gray-500 edit-material-file border rounded bg-white p-0.5" />
+                </div>
+                <button type="button" onclick="document.getElementById('${rowId}').remove()" class="text-red-500 hover:text-red-700 text-xs p-1.5 self-end sm:self-center">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `);
+    }
+
     function openEditAdminModal(workLogId) {
         const punch = currentAdminWorkLogs.find(p => p.workLogId === workLogId);
         if (!punch) return;
@@ -726,6 +866,7 @@
         document.getElementById('edit-log-task').value = punch.taskId;
         document.getElementById('edit-log-hours').value = punch.hoursWorked;
         document.getElementById('edit-log-notes').value = punch.workNotes;
+        populateEditModalMaterials(punch);
 
         const modal = document.getElementById('edit-punch-modal');
         modal.classList.remove('hidden');
@@ -742,6 +883,7 @@
         document.getElementById('edit-log-task').value = punch.taskId;
         document.getElementById('edit-log-hours').value = punch.hoursWorked;
         document.getElementById('edit-log-notes').value = punch.workNotes;
+        populateEditModalMaterials(punch);
 
         const modal = document.getElementById('edit-punch-modal');
         modal.classList.remove('hidden');
@@ -755,7 +897,7 @@
         setTimeout(() => modal.classList.add('hidden'), 300);
     }
 
-    function submitPunchEdit(e) {
+    async function submitPunchEdit(e) {
         if(e) e.preventDefault();
         const btn = document.getElementById('save-edit-btn');
         const originalBtnText = btn.innerText;
@@ -768,8 +910,30 @@
             propertyId: document.getElementById('edit-log-property').value.trim(),
             taskId: document.getElementById('edit-log-task').value.trim(),
             hours: parseFloat(document.getElementById('edit-log-hours').value),
-            notes: document.getElementById('edit-log-notes').value
+            notes: document.getElementById('edit-log-notes').value,
+            newMaterials: []
         };
+
+        const editMatRows = document.querySelectorAll('[id^="edit-material-row-"]');
+        for (let i = 0; i < editMatRows.length; i++) {
+            const row = editMatRows[i];
+            const fileInput = row.querySelector('.edit-material-file');
+            let fileData = null, fileName = null, fileType = null;
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const processed = await compressReceiptImage(fileInput.files[0]);
+                fileData = processed.fileData;
+                fileName = processed.fileName;
+                fileType = processed.fileType;
+            }
+            payload.newMaterials.push({
+                vendor: row.querySelector('.edit-material-vendor').value,
+                description: row.querySelector('.edit-material-desc').value,
+                cost: parseFloat(row.querySelector('.edit-material-cost').value),
+                fileData: fileData,
+                fileName: fileName,
+                fileType: fileType
+            });
+        }
 
         google.script.run
             .withSuccessHandler(function(res) {

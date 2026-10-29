@@ -240,57 +240,7 @@ function submitWorkLog(payload) {
     
     // --- WRITE TO MATERIALS SHEET (If materials were added) ---
     if (payload.materials && payload.materials.length > 0) {
-      var materialSheet = ss.getSheetByName('fact_Material_Expenses');
-      if (!materialSheet) throw new Error("Could not find sheet: fact_Material_Expenses");
-      
-      var receiptsFolder = null;
-      var allowedMimeTypes = [
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'
-      ];
-      var maxFileBytes = 10 * 1024 * 1024; // 10 MB limit
-
-      for (var i = 0; i < payload.materials.length; i++) {
-        var item = payload.materials[i];
-        var receiptUrl = "";
-
-        // Handle File Upload to Drive if provided
-        if (item.fileData && item.fileName) {
-          var mimeType = (item.fileType || '').toLowerCase();
-          if (allowedMimeTypes.indexOf(mimeType) === -1) {
-            throw new Error("Invalid receipt file type for '" + item.fileName + "'. Only images and PDFs are allowed.");
-          }
-          try {
-            if (!receiptsFolder) {
-              receiptsFolder = getOrCreateReceiptsFolder();
-            }
-            var base64Content = item.fileData;
-            if (base64Content.indexOf(',') > -1) {
-              base64Content = base64Content.split(',')[1];
-            }
-            var bytes = Utilities.base64Decode(base64Content);
-            if (bytes.length > maxFileBytes) {
-              throw new Error("Receipt file '" + item.fileName + "' exceeds the 10 MB size limit.");
-            }
-            var safeFileName = item.fileName.replace(/[^\w.\- ()]/g, '_');
-            var blob = Utilities.newBlob(bytes, mimeType, safeFileName);
-            var driveFile = receiptsFolder.createFile(blob);
-            receiptUrl = driveFile.getUrl();
-          } catch (fileErr) {
-            console.error("Error saving receipt photo: " + fileErr.message);
-            throw new Error("Failed to upload receipt: " + fileErr.message);
-          }
-        }
-
-        materialSheet.appendRow([
-          Utilities.getUuid(),    // Expense_ID
-          workLogId,              // Work_Log_ID
-          payload.propertyId,     // Property_ID
-          item.vendor,            // Vendor_Name
-          item.description,       // Item_Description
-          item.cost,              // Cost
-          receiptUrl              // Receipt_URL
-        ]);
-      }
+      _appendMaterialExpensesForWorkLog(ss, workLogId, payload.propertyId, payload.materials);
     }
     
     return { success: true, message: "Log saved successfully" };
@@ -299,6 +249,61 @@ function submitWorkLog(payload) {
     return { success: false, error: error.message };
   } finally {
     lock.releaseLock();
+  }
+}
+
+function _appendMaterialExpensesForWorkLog(ss, workLogId, propertyId, materials) {
+  if (!materials || materials.length === 0) return;
+  var materialSheet = ss.getSheetByName('fact_Material_Expenses');
+  if (!materialSheet) throw new Error("Could not find sheet: fact_Material_Expenses");
+
+  var receiptsFolder = null;
+  var allowedMimeTypes = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'
+  ];
+  var maxFileBytes = 10 * 1024 * 1024; // 10 MB limit
+
+  for (var i = 0; i < materials.length; i++) {
+    var item = materials[i];
+    if (!item || (!item.vendor && !item.description && !item.cost)) continue;
+    var receiptUrl = "";
+
+    if (item.fileData && item.fileName) {
+      var mimeType = (item.fileType || '').toLowerCase();
+      if (allowedMimeTypes.indexOf(mimeType) === -1) {
+        throw new Error("Invalid receipt file type for '" + item.fileName + "'. Only images and PDFs are allowed.");
+      }
+      try {
+        if (!receiptsFolder) {
+          receiptsFolder = getOrCreateReceiptsFolder();
+        }
+        var base64Content = item.fileData;
+        if (base64Content.indexOf(',') > -1) {
+          base64Content = base64Content.split(',')[1];
+        }
+        var bytes = Utilities.base64Decode(base64Content);
+        if (bytes.length > maxFileBytes) {
+          throw new Error("Receipt file '" + item.fileName + "' exceeds the 10 MB size limit.");
+        }
+        var safeFileName = item.fileName.replace(/[^\w.\- ()]/g, '_');
+        var blob = Utilities.newBlob(bytes, mimeType, safeFileName);
+        var driveFile = receiptsFolder.createFile(blob);
+        receiptUrl = driveFile.getUrl();
+      } catch (fileErr) {
+        console.error("Error saving receipt photo: " + fileErr.message);
+        throw new Error("Failed to upload receipt: " + fileErr.message);
+      }
+    }
+
+    materialSheet.appendRow([
+      Utilities.getUuid(),    // Expense_ID
+      workLogId,              // Work_Log_ID
+      propertyId,             // Property_ID
+      item.vendor,            // Vendor_Name
+      item.description,       // Item_Description
+      item.cost,              // Cost
+      receiptUrl              // Receipt_URL
+    ]);
   }
 }
 
@@ -681,8 +686,30 @@ function getEmployeeWorkLogs() {
     var employeeId = activeUser.employeeId;
 
     var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    var matSheet = ss.getSheetByName('fact_Material_Expenses');
     var punches = [];
     var dailyTotals = {};
+    var materialsByLog = {};
+
+    if (matSheet && matSheet.getLastRow() > 1) {
+      var matData = matSheet.getRange(2, 1, matSheet.getLastRow() - 1, 7).getValues();
+      for (var m = 0; m < matData.length; m++) {
+        var mRow = matData[m];
+        var wLogId = (mRow[1] || '').toString().trim();
+        if (wLogId) {
+          if (!materialsByLog[wLogId]) materialsByLog[wLogId] = [];
+          materialsByLog[wLogId].push({
+            expenseId: mRow[0],
+            workLogId: wLogId,
+            propertyId: mRow[2],
+            vendor: mRow[3],
+            description: mRow[4],
+            cost: parseFloat(mRow[5]) || 0,
+            receiptUrl: mRow[6] || ''
+          });
+        }
+      }
+    }
 
     if (laborSheet && laborSheet.getLastRow() > 1) {
       var laborData = laborSheet.getRange(2, 1, laborSheet.getLastRow() - 1, 11).getValues();
@@ -701,9 +728,10 @@ function getEmployeeWorkLogs() {
 
           var hours = parseFloat(row[6]) || 0;
           var status = (row[8] || 'Pending').toString().trim();
+          var workLogId = (row[0] || '').toString().trim();
 
           punches.push({
-            workLogId: row[0],
+            workLogId: workLogId,
             timestamp: row[1] ? new Date(row[1]).toISOString() : '',
             dateCompleted: dateStr,
             propertyId: row[4],
@@ -711,7 +739,9 @@ function getEmployeeWorkLogs() {
             hoursWorked: hours,
             workNotes: row[7],
             payrollStatus: status,
-            billingStatus: (row[9] || 'Unbilled').toString().trim()
+            billingStatus: (row[9] || 'Unbilled').toString().trim(),
+            chargeTarget: (row[10] || 'Owner').toString().trim(),
+            materials: materialsByLog[workLogId] || []
           });
 
           if (dateStr) {
@@ -805,6 +835,10 @@ function updateWorkLog(payload) {
     var validChargeTargets = ['Owner', 'Security Deposit', 'Overhead'];
     if (isAdmin && payload.chargeTarget !== undefined && validChargeTargets.indexOf(payload.chargeTarget) > -1) {
       laborSheet.getRange(rowToUpdate, 11, 1, 1).setValue(payload.chargeTarget);
+    }
+
+    if (payload.newMaterials && payload.newMaterials.length > 0) {
+      _appendMaterialExpensesForWorkLog(ss, payload.workLogId, payload.propertyId, payload.newMaterials);
     }
 
     return { success: true, message: "Punch updated successfully" };
@@ -1108,9 +1142,10 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
       matData = matData.concat(archiveMatSheet.getRange(2, 1, archiveMatSheet.getLastRow() - 1, 7).getValues());
     }
 
+    var adminMaterialsByLog = {};
     if (matData.length > 0) {
       matData.forEach(function(row) {
-        materials.push({
+        var mItem = {
           expenseId: row[0],
           workLogId: row[1],
           propertyId: row[2],
@@ -1118,9 +1153,19 @@ function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
           description: row[4],
           cost: parseFloat(row[5]) || 0,
           receiptUrl: row[6] || ''
-        });
+        };
+        materials.push(mItem);
+        var wId = (row[1] || '').toString().trim();
+        if (wId) {
+          if (!adminMaterialsByLog[wId]) adminMaterialsByLog[wId] = [];
+          adminMaterialsByLog[wId].push(mItem);
+        }
       });
     }
+
+    workLogs.forEach(function(wLog) {
+      wLog.materials = adminMaterialsByLog[(wLog.workLogId || '').toString().trim()] || [];
+    });
 
     // Aggregates for Payroll by Employee
     var employeeSummaries = {};
