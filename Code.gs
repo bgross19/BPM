@@ -999,6 +999,60 @@ function updateChargeAmount(workLogId, amount) {
   }
 }
 
+// 3.9 UPDATE WORK LOG CHARGE TARGET INLINE
+function updateWorkLogChargeTarget(workLogId, newTarget) {
+  if (!_isAdminOrOwner()) {
+    return { success: false, error: "Unauthorized. Admin or Owner access required." };
+  }
+  var validTargets = ['Owner', 'Security Deposit', 'Overhead'];
+  if (validTargets.indexOf(newTarget) === -1) {
+    return { success: false, error: "Invalid charge target." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getSpreadsheet();
+    var laborSheet = ss.getSheetByName('fact_Work_Logs');
+    if (!laborSheet) throw new Error("Could not find sheet: fact_Work_Logs");
+
+    var lastRow = laborSheet.getLastRow();
+    var rowToUpdate = -1;
+    if (lastRow > 1) {
+      var values = laborSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < values.length; i++) {
+        if ((values[i][0] || '').toString().trim() === workLogId) {
+          rowToUpdate = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (rowToUpdate === -1) {
+      var archiveSheet = ss.getSheetByName('archive_fact_Work_Logs');
+      if (archiveSheet && archiveSheet.getLastRow() > 1) {
+        var aValues = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 1).getValues();
+        for (var j = 0; j < aValues.length; j++) {
+          if ((aValues[j][0] || '').toString().trim() === workLogId) {
+            rowToUpdate = j + 2;
+            laborSheet = archiveSheet;
+            break;
+          }
+        }
+      }
+    }
+
+    if (rowToUpdate === -1) throw new Error("Work log entry not found.");
+
+    laborSheet.getRange(rowToUpdate, 11).setValue(newTarget);
+    return { success: true, message: "Charge target updated to " + newTarget };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // 4. ADMIN PAYROLL & BILLING CALCULATIONS WITH DATE FILTERING
 // Fetches records from fact_Work_Logs, dim_Employees, and fact_Material_Expenses with optional start/end date filtering.
 function getAdminPayrollData(startDateStr, endDateStr, statusFilter) {
@@ -1763,17 +1817,19 @@ function getLeasesAndTenants() {
     if (leaseSheet && leaseSheet.getLastRow() > 1) {
       var leaseData = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, leaseSheet.getLastColumn()).getValues();
       leases = leaseData.map(function(row) {
+        var sDate = row[2] instanceof Date ? Utilities.formatDate(row[2], Session.getScriptTimeZone(), 'yyyy-MM-dd') : (row[2] ? row[2].toString() : '');
+        var eDate = row[3] instanceof Date ? Utilities.formatDate(row[3], Session.getScriptTimeZone(), 'yyyy-MM-dd') : (row[3] ? row[3].toString() : '');
         return {
           leaseId: row[0],
           propertyId: row[1],
-          startDate: row[2],
-          endDate: row[3],
-          monthlyRent: row[4],
-          securityDeposit: row[5],
-          status: row[6],
+          startDate: sDate,
+          endDate: eDate,
+          monthlyRent: parseFloat(row[4]) || 0,
+          securityDeposit: parseFloat(row[5]) || 0,
+          status: row[6] || 'Active',
           managementFeePercent: parseFloat(row[7]) || 8.0,
           lateFeePerDay: parseFloat(row[8]) || 5.0,
-          gracePeriodDays: parseInt(row[9]) || 5
+          gracePeriodDays: parseInt(row[9], 10) || 5
         };
       });
     }
@@ -1794,6 +1850,33 @@ function getLeasesAndTenants() {
     return { success: true, leases: leases, tenants: tenants };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+}
+
+function updateLeaseStatus(leaseId, newStatus) {
+  if (!_isAdminOrOwner()) return { success: false, error: "Unauthorized access." };
+  var validStatuses = ['Active', 'Ended', 'Terminated'];
+  if (validStatuses.indexOf(newStatus) === -1) {
+    return { success: false, error: "Invalid lease status." };
+  }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getSpreadsheet();
+    var leaseSheet = ss.getSheetByName('fact_Leases');
+    if (!leaseSheet || leaseSheet.getLastRow() <= 1) throw new Error("No leases found.");
+    var values = leaseSheet.getRange(2, 1, leaseSheet.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < values.length; i++) {
+      if ((values[i][0] || '').toString().trim() === leaseId) {
+        leaseSheet.getRange(i + 2, 7).setValue(newStatus);
+        return { success: true, message: "Lease status updated to " + newStatus };
+      }
+    }
+    throw new Error("Lease not found.");
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1847,14 +1930,31 @@ function calculateLeaseBalance(leaseId) {
     var totalCharges = 0;
     var totalPayments = 0;
     var lateFeesIncurred = 0;
+    var ledgerEntries = [];
 
     if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
-      var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, 7).getValues();
+      var lastCol = Math.max(7, Math.min(11, ledgerSheet.getLastColumn()));
+      var ledgerData = ledgerSheet.getRange(2, 1, ledgerSheet.getLastRow() - 1, lastCol).getValues();
       for (var j = 0; j < ledgerData.length; j++) {
         if (ledgerData[j][1] === leaseId) {
+          var rawTxDate = ledgerData[j][3];
+          var txDateStr = rawTxDate instanceof Date
+            ? Utilities.formatDate(rawTxDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+            : (rawTxDate ? rawTxDate.toString().trim() : '');
           var txType = (ledgerData[j][4] || '').toString().trim();
           var chargeAmt = parseFloat(ledgerData[j][5]) || 0;
           var paymentAmt = parseFloat(ledgerData[j][6]) || 0;
+
+          ledgerEntries.push({
+            ledgerId: ledgerData[j][0],
+            tenantId: ledgerData[j][2],
+            date: txDateStr,
+            transactionType: txType,
+            chargeAmount: chargeAmt,
+            paymentAmount: paymentAmt,
+            paymentMode: ledgerData[j][7] || '',
+            notes: ledgerData[j][8] || ''
+          });
 
           // Exclude initial Security Deposit collection from rent balance calculations
           if (txType === 'Security Deposit') continue;
@@ -1869,6 +1969,10 @@ function calculateLeaseBalance(leaseId) {
       }
     }
 
+    ledgerEntries.sort(function(a, b) {
+      return new Date(b.date) - new Date(a.date);
+    });
+
     lateFeesIncurred = Math.max(0, lateFeesIncurred);
 
     // Balance = (Expected Rent from start to effective end) + (Additional Charges like Late Fees) - (Payments)
@@ -1881,7 +1985,8 @@ function calculateLeaseBalance(leaseId) {
       totalCharges: totalCharges,
       totalPayments: totalPayments,
       lateFeesIncurred: lateFeesIncurred,
-      monthsPassed: monthsPassed
+      monthsPassed: monthsPassed,
+      ledgerEntries: ledgerEntries
     };
 
   } catch (error) {
