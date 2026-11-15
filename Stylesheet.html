@@ -1,8 +1,63 @@
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .toast-enter { transform: translateY(100%); opacity: 0; }
-        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
-        .toast-leave { transform: translateY(0); opacity: 1; }
-        .toast-leave-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in; }
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
-    </style>
+<style>
+  :root {
+    --bpm-navy: #0f172a;
+    --bpm-blue: #1e3a8a;
+    --bpm-accent: #2563eb;
+    --bpm-bg: #f1f5f9;
+  }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bpm-bg);
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .bpm-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .bpm-btn-touch {
+    min-height: 44px;
+  }
+  .sticky-col-left {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background-color: #ffffff;
+    box-shadow: 2px 0 6px rgba(15, 23, 42, 0.06);
+  }
+  .sticky-header-left {
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    background-color: #f8fafc;
+    box-shadow: 2px 0 6px rgba(15, 23, 42, 0.06);
+  }
+  .rent-cell {
+    min-width: 82px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .rent-cell:hover {
+    box-shadow: inset 0 0 0 2px #3b82f6;
+  }
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #ffffff; }
+  }
+</style>
