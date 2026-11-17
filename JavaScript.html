@@ -2116,9 +2116,9 @@
 
     // Employees Table
     document.getElementById('settings-employees-container').innerHTML =
-      '<table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 border-b text-slate-500 font-semibold"><th class="p-2">Name</th><th class="p-2">Email / Phone</th><th class="p-2">Role</th><th class="p-2">Pay Type</th><th class="p-2 text-right">Pay Rate</th><th class="p-2">PIN</th><th class="p-2 text-right">Edit</th></tr></thead><tbody>' +
+      '<table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 border-b text-slate-500 font-semibold"><th class="p-2">Name</th><th class="p-2">Work Email</th><th class="p-2">Phone Number</th><th class="p-2">Role</th><th class="p-2">Pay Type</th><th class="p-2 text-right">Pay Rate</th><th class="p-2">PIN</th><th class="p-2 text-right">Edit</th></tr></thead><tbody>' +
       (b.employees || []).map(function (e) {
-        return '<tr class="border-b"><td class="p-2 font-bold">' + esc(e.Name) + '</td><td class="p-2">' + (e.Email ? '<div>' + esc(e.Email) + '</div>' : '') + (e.Phone ? '<div class="text-slate-500">' + esc(e.Phone) + '</div>' : '') + (!e.Email && !e.Phone ? '-' : '') + '</td><td class="p-2">' + esc(e.Role) + '</td><td class="p-2">' + esc(e.Pay_Type) + '</td><td class="p-2 text-right">' + fmtMoney(e.Default_Pay_Rate) + '</td>' +
+        return '<tr class="border-b"><td class="p-2 font-bold">' + esc(e.Name) + '</td><td class="p-2">' + esc(e.Email || '-') + '</td><td class="p-2">' + esc(e.Phone || '-') + '</td><td class="p-2">' + esc(e.Role) + '</td><td class="p-2">' + esc(e.Pay_Type) + '</td><td class="p-2 text-right">' + fmtMoney(e.Default_Pay_Rate) + '</td>' +
           '<td class="p-2">' + (e.Has_Pin ? '<span class="badge-pill bg-emerald-100 text-emerald-800">Set</span>' : '<span class="badge-pill bg-amber-100 text-amber-800">Unset</span>') + '</td>' +
           '<td class="p-2 text-right"><button type="button" data-action="open-entity-modal" data-entity="Employee" data-id="' + esc(e.Employee_ID) + '" class="text-blue-700 font-semibold hover:underline">Edit / PIN</button></td></tr>';
       }).join('') + '</tbody></table>';
@@ -2213,8 +2213,9 @@
       form.innerHTML =
         '<div><label class="block font-semibold mb-1">Full Name *</label><input name="name" required value="' + esc(e.Name || '') + '" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
         '<div class="grid grid-cols-2 gap-2">' +
-        '<div><label class="block font-semibold mb-1">Email (optional if Phone set)</label><input type="email" name="email" value="' + esc(e.Email || '') + '" placeholder="name@email.com" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
-        '<div><label class="block font-semibold mb-1">Phone (optional if Email set)</label><input type="tel" name="phone" value="' + esc(e.Phone || '') + '" placeholder="(317) 555-0123" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div></div>' +
+        '<div><label class="block font-semibold mb-1">Work Email</label><input type="email" name="email" value="' + esc(e.Email || '') + '" placeholder="name@email.com" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
+        '<div><label class="block font-semibold mb-1">Phone Number</label><input type="tel" name="phone" value="' + esc(e.Phone || '') + '" placeholder="(317) 555-0123" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div></div>' +
+        '<p class="text-[11px] text-slate-500 -mt-1">Add both Work Email and Phone Number (or either one) — both can be used to sign in.</p>' +
         '<div class="grid grid-cols-3 gap-2">' +
         '<div><label class="block font-semibold mb-1">Role</label><select name="role" class="w-full rounded border border-slate-300 px-2 py-2 bg-white">' +
         ['Owner', 'Admin', 'Field Crew', 'Contractor'].map(function (r) { return '<option' + (e.Role === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>' +

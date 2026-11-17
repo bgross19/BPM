@@ -865,16 +865,19 @@ function bootstrapApp(clientToken) {
 }
 
 /**
- * Generates and emails a 6-digit login code for registered active employees.
+ * Generates and emails a 6-digit login code for registered active employees (lookup by Work Email or Phone Number).
  */
-function requestLoginCode(email) {
-  const clean = String(email || '').trim().toLowerCase();
-  if (!clean) throw new Error('Please enter your email address.');
-  const emp = findEmployeeByEmail(clean);
+function requestLoginCode(identifier) {
+  const clean = String(identifier || '').trim();
+  if (!clean) throw new Error('Please enter your work email or phone number.');
+  const emp = findEmployeeByIdentifier(clean);
   if (emp) {
+    if (!String(emp.Email || '').trim()) {
+      throw new Error('This account only has a phone number on file. Please sign in on the PIN Sign-In tab.');
+    }
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const cache = CacheService.getScriptCache();
-    cache.put('OTP_' + clean, sha256Hex(clean + ':' + code), OTP_TTL_SECONDS);
+    cache.put('OTP_' + emp.Employee_ID, sha256Hex(emp.Employee_ID + ':' + code), OTP_TTL_SECONDS);
     const settings = getSettingsMap();
     const html =
       '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:10px">' +
@@ -890,30 +893,30 @@ function requestLoginCode(email) {
       body: 'Your login code is: ' + code + ' (expires in 15 minutes).',
       htmlBody: html
     });
-    addAuditLog(emp.Email, 'REQUEST_OTP', 'Employee', emp.Employee_ID, 'Login code sent');
+    addAuditLog(emp.Email || emp.Phone || emp.Name, 'REQUEST_OTP', 'Employee', emp.Employee_ID, 'Login code sent');
   }
-  return { ok: true, message: 'If your email is registered, a 6-digit login code has been sent.' };
+  return { ok: true, message: 'If your account is registered, a 6-digit login code has been sent to your email.' };
 }
 
 /**
  * Verifies 6-digit OTP code and creates a 30-day session token.
  */
-function verifyLoginCode(email, code) {
-  const clean = String(email || '').trim().toLowerCase();
+function verifyLoginCode(identifier, code) {
+  const clean = String(identifier || '').trim();
   const cleanCode = String(code || '').trim();
-  if (!clean || !cleanCode) throw new Error('Email and 6-digit code are required.');
+  if (!clean || !cleanCode) throw new Error('Work email/phone number and 6-digit code are required.');
+  const emp = findEmployeeByIdentifier(clean);
+  if (!emp) throw new Error('Invalid or expired login code.');
   const cache = CacheService.getScriptCache();
-  const expectedHash = cache.get('OTP_' + clean);
-  if (!expectedHash || expectedHash !== sha256Hex(clean + ':' + cleanCode)) {
+  const expectedHash = cache.get('OTP_' + emp.Employee_ID);
+  if (!expectedHash || expectedHash !== sha256Hex(emp.Employee_ID + ':' + cleanCode)) {
     throw new Error('Invalid or expired login code.');
   }
-  const emp = findEmployeeByEmail(clean);
-  if (!emp) throw new Error('Account not found or inactive.');
-  cache.remove('OTP_' + clean);
+  cache.remove('OTP_' + emp.Employee_ID);
   return withScriptLock(function () {
     const token = issueSessionForEmployee(emp);
     const user = buildPublicUser(emp);
-    addAuditLog(emp.Email, 'LOGIN_OTP', 'Session', emp.Employee_ID, 'Signed in with OTP');
+    addAuditLog(emp.Email || emp.Phone || emp.Name, 'LOGIN_OTP', 'Session', emp.Employee_ID, 'Signed in with OTP');
     return sanitizeForWire({
       ok: true,
       token: token,
