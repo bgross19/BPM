@@ -714,6 +714,29 @@ function findEmployeeByEmail(email) {
   }) || null;
 }
 
+function normalizePhoneDigits(val) {
+  const d = String(val || '').replace(/\D+/g, '');
+  if (d.length === 11 && d.charAt(0) === '1') return d.slice(1);
+  return d;
+}
+
+function findEmployeeByIdentifier(identifier) {
+  const byEmail = findEmployeeByEmail(identifier);
+  if (byEmail) return byEmail;
+  const digits = normalizePhoneDigits(identifier);
+  if (digits.length < 7) return null;
+  const tbl = getTableData('dim_Employees');
+  return tbl.rows.find(function (r) {
+    if (!toBool(r.Active, true)) return false;
+    const empDigits = normalizePhoneDigits(r.Phone);
+    if (!empDigits || empDigits.length < 7) return false;
+    if (empDigits === digits) return true;
+    if (digits.length === 7 && empDigits.slice(-7) === digits) return true;
+    if (empDigits.length === 7 && digits.slice(-7) === empDigits) return true;
+    return false;
+  }) || null;
+}
+
 function findEmployeeById(empId) {
   const tbl = getTableData('dim_Employees');
   return tbl.rows.find(function (r) {
@@ -745,7 +768,7 @@ function issueSessionForEmployee(emp) {
   appendRecords('sys_Sessions', [{
     Token_Hash: tokenHash,
     Employee_ID: emp.Employee_ID,
-    Email: emp.Email,
+    Email: emp.Email || emp.Phone || '',
     Role: emp.Role,
     Expires_At: expires.toISOString(),
     Created_At: now.toISOString(),
@@ -902,26 +925,26 @@ function verifyLoginCode(email, code) {
 }
 
 /**
- * Verifies Email + numeric PIN and creates a 30-day session token.
+ * Verifies Email or Phone Number + numeric PIN and creates a 30-day session token.
  */
-function loginWithPin(email, pin) {
-  const clean = String(email || '').trim().toLowerCase();
+function loginWithPin(identifier, pin) {
+  const clean = String(identifier || '').trim();
   const cleanPin = String(pin || '').trim();
-  if (!clean || !cleanPin) throw new Error('Email and PIN are required.');
-  const emp = findEmployeeByEmail(clean);
-  if (!emp) throw new Error('Invalid email or PIN.');
+  if (!clean || !cleanPin) throw new Error('Email or phone number and PIN are required.');
+  const emp = findEmployeeByIdentifier(clean);
+  if (!emp) throw new Error('Invalid email/phone or PIN.');
   const storedHash = String(emp.Pin_Hash || '').trim();
   if (!storedHash) {
-    throw new Error('No PIN set yet for this account. Click "Email 6-Digit Code" to sign in and set your PIN.');
+    throw new Error('No PIN set yet for this account. Ask an Admin to set a PIN or use Email 6-Digit Code.');
   }
   const attemptHash = sha256Hex(emp.Employee_ID + ':' + cleanPin);
   if (attemptHash !== storedHash) {
-    throw new Error('Invalid email or PIN.');
+    throw new Error('Invalid email/phone or PIN.');
   }
   return withScriptLock(function () {
     const token = issueSessionForEmployee(emp);
     const user = buildPublicUser(emp);
-    addAuditLog(emp.Email, 'LOGIN_PIN', 'Session', emp.Employee_ID, 'Signed in with PIN');
+    addAuditLog(emp.Email || emp.Phone || emp.Name, 'LOGIN_PIN', 'Session', emp.Employee_ID, 'Signed in with PIN');
     return sanitizeForWire({
       ok: true,
       token: token,
@@ -3753,7 +3776,7 @@ function saveEmployee(token, payload) {
     const rec = {
       Name: String(payload.name || '').trim(),
       Email: String(payload.email || '').trim(),
-      Phone: String(payload.phone || ''),
+      Phone: String(payload.phone || '').trim(),
       Pay_Type: ['Hourly', 'Flat/1099', 'Salary/Owner'].indexOf(payload.payType) !== -1 ? payload.payType : 'Hourly',
       Default_Pay_Rate: round2(toNum(payload.defaultPayRate, 25)),
       Role: ['Owner', 'Admin', 'Field Crew', 'Contractor'].indexOf(payload.role) !== -1 ? payload.role : 'Field Crew',
@@ -3763,7 +3786,7 @@ function saveEmployee(token, payload) {
         : '',
       Notes: String(payload.notes || '')
     };
-    if (!rec.Name || !rec.Email) throw new Error('Employee Name and Email are required.');
+    if (!rec.Name || (!rec.Email && !rec.Phone)) throw new Error('Employee Name and either Email or Phone Number are required.');
     let saved;
     if (payload.employeeId) {
       if (payload.newPin && /^\d{4,8}$/.test(String(payload.newPin).trim())) {
@@ -3900,12 +3923,12 @@ function importBulkRecords(token, payload) {
       appendRecords('dim_Owners', batch);
       imported = batch.length;
     } else if (type === 'Employees') {
-      const batch = rows.filter(function (r) { return String(r.Name || '').trim() && String(r.Email || '').trim(); }).map(function (r) {
+      const batch = rows.filter(function (r) { return String(r.Name || '').trim() && (String(r.Email || '').trim() || String(r.Phone || '').trim()); }).map(function (r) {
         return {
           Employee_ID: newId('EMP'),
           Name: String(r.Name).trim(),
-          Email: String(r.Email).trim(),
-          Phone: String(r.Phone || ''),
+          Email: String(r.Email || '').trim(),
+          Phone: String(r.Phone || '').trim(),
           Pay_Type: String(r.Pay_Type || 'Hourly'),
           Default_Pay_Rate: round2(toNum(r.Default_Pay_Rate, 25)),
           Role: String(r.Role || 'Field Crew'),

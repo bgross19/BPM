@@ -2116,9 +2116,9 @@
 
     // Employees Table
     document.getElementById('settings-employees-container').innerHTML =
-      '<table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 border-b text-slate-500 font-semibold"><th class="p-2">Name</th><th class="p-2">Email</th><th class="p-2">Role</th><th class="p-2">Pay Type</th><th class="p-2 text-right">Pay Rate</th><th class="p-2">PIN</th><th class="p-2 text-right">Edit</th></tr></thead><tbody>' +
+      '<table class="w-full text-left text-xs"><thead><tr class="bg-slate-50 border-b text-slate-500 font-semibold"><th class="p-2">Name</th><th class="p-2">Email / Phone</th><th class="p-2">Role</th><th class="p-2">Pay Type</th><th class="p-2 text-right">Pay Rate</th><th class="p-2">PIN</th><th class="p-2 text-right">Edit</th></tr></thead><tbody>' +
       (b.employees || []).map(function (e) {
-        return '<tr class="border-b"><td class="p-2 font-bold">' + esc(e.Name) + '</td><td class="p-2">' + esc(e.Email) + '</td><td class="p-2">' + esc(e.Role) + '</td><td class="p-2">' + esc(e.Pay_Type) + '</td><td class="p-2 text-right">' + fmtMoney(e.Default_Pay_Rate) + '</td>' +
+        return '<tr class="border-b"><td class="p-2 font-bold">' + esc(e.Name) + '</td><td class="p-2">' + (e.Email ? '<div>' + esc(e.Email) + '</div>' : '') + (e.Phone ? '<div class="text-slate-500">' + esc(e.Phone) + '</div>' : '') + (!e.Email && !e.Phone ? '-' : '') + '</td><td class="p-2">' + esc(e.Role) + '</td><td class="p-2">' + esc(e.Pay_Type) + '</td><td class="p-2 text-right">' + fmtMoney(e.Default_Pay_Rate) + '</td>' +
           '<td class="p-2">' + (e.Has_Pin ? '<span class="badge-pill bg-emerald-100 text-emerald-800">Set</span>' : '<span class="badge-pill bg-amber-100 text-amber-800">Unset</span>') + '</td>' +
           '<td class="p-2 text-right"><button type="button" data-action="open-entity-modal" data-entity="Employee" data-id="' + esc(e.Employee_ID) + '" class="text-blue-700 font-semibold hover:underline">Edit / PIN</button></td></tr>';
       }).join('') + '</tbody></table>';
@@ -2211,25 +2211,33 @@
     } else if (entity === 'Employee') {
       const e = id ? (STATE.byId.emp[id] || {}) : {};
       form.innerHTML =
-        '<div class="grid grid-cols-2 gap-2">' +
         '<div><label class="block font-semibold mb-1">Full Name *</label><input name="name" required value="' + esc(e.Name || '') + '" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
-        '<div><label class="block font-semibold mb-1">Email *</label><input type="email" name="email" required value="' + esc(e.Email || '') + '" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div></div>' +
+        '<div class="grid grid-cols-2 gap-2">' +
+        '<div><label class="block font-semibold mb-1">Email (optional if Phone set)</label><input type="email" name="email" value="' + esc(e.Email || '') + '" placeholder="name@email.com" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
+        '<div><label class="block font-semibold mb-1">Phone (optional if Email set)</label><input type="tel" name="phone" value="' + esc(e.Phone || '') + '" placeholder="(317) 555-0123" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div></div>' +
         '<div class="grid grid-cols-3 gap-2">' +
         '<div><label class="block font-semibold mb-1">Role</label><select name="role" class="w-full rounded border border-slate-300 px-2 py-2 bg-white">' +
         ['Owner', 'Admin', 'Field Crew', 'Contractor'].map(function (r) { return '<option' + (e.Role === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="block font-semibold mb-1">Pay Type</label><select name="payType" class="w-full rounded border border-slate-300 px-2 py-2 bg-white">' +
         ['Hourly', 'Flat/1099', 'Salary/Owner'].map(function (pt) { return '<option' + (e.Pay_Type === pt ? ' selected' : '') + '>' + pt + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="block font-semibold mb-1">Pay Rate ($)</label><input type="number" step="0.01" name="defaultPayRate" value="' + esc(e.Default_Pay_Rate || 25) + '" class="w-full rounded border border-slate-300 px-2 py-2" /></div></div>' +
-        '<div><label class="block font-semibold mb-1">Set / Reset 4–8 Digit PIN (optional)</label><input type="password" inputmode="numeric" name="newPin" placeholder="Leave blank to keep existing PIN" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
+        '<div><label class="block font-semibold mb-1">Set / Reset 4–8 Digit PIN (required for Phone sign-in)</label><input type="password" inputmode="numeric" name="newPin" placeholder="Leave blank to keep existing PIN" class="w-full rounded border border-slate-300 px-2.5 py-2" /></div>' +
         '<div class="flex justify-end gap-2 pt-2 border-t"><button type="button" data-action="close-modal" class="px-4 py-2 rounded border font-semibold">Cancel</button>' +
         '<button type="submit" class="px-5 py-2 rounded bg-blue-700 text-white font-semibold">Save Team Member</button></div>';
       form.onsubmit = async function (ev) {
         ev.preventDefault();
         const fd = new FormData(form);
+        const em = String(fd.get('email') || '').trim();
+        const ph = String(fd.get('phone') || '').trim();
+        if (!em && !ph) {
+          showToast('Please provide either an Email or a Phone Number.', 'error');
+          return;
+        }
         await apiCall('saveEmployee', STATE.token, {
           employeeId: id || '',
           name: fd.get('name'),
-          email: fd.get('email'),
+          email: em,
+          phone: ph,
           role: fd.get('role'),
           payType: fd.get('payType'),
           defaultPayRate: fd.get('defaultPayRate'),
@@ -2689,8 +2697,8 @@
       { Task_ID: 'TSK-005', Task_Name: 'General Maintenance', Default_Billable_Rate: 65, Default_Billing_Unit: 'Hourly', Active: 'TRUE' }
     ],
     employees: [
-      { Employee_ID: 'EMP-001', Name: 'Brian Gross', Email: 'BGross19@gmail.com', Role: 'Owner', Pay_Type: 'Hourly', Default_Pay_Rate: 35, Has_Pin: true, Active: 'TRUE' },
-      { Employee_ID: 'EMP-002', Name: 'Jason R.', Email: 'jason@example.com', Role: 'Field Crew', Pay_Type: 'Hourly', Default_Pay_Rate: 25, Has_Pin: true, Active: 'TRUE' }
+      { Employee_ID: 'EMP-001', Name: 'Brian Gross', Email: 'BGross19@gmail.com', Phone: '317-555-0199', Role: 'Owner', Pay_Type: 'Hourly', Default_Pay_Rate: 35, Has_Pin: true, Active: 'TRUE' },
+      { Employee_ID: 'EMP-002', Name: 'Jason R.', Email: 'jason@example.com', Phone: '317-555-0123', Role: 'Field Crew', Pay_Type: 'Hourly', Default_Pay_Rate: 25, Has_Pin: true, Active: 'TRUE' }
     ],
     billingRates: [],
     workOrders: [
@@ -2784,8 +2792,14 @@
         }
       };
     },
-    loginWithPin: function (email) {
-      const found = MOCK_DB.employees.find(function (e) { return e.Email.toLowerCase() === String(email).toLowerCase(); });
+    loginWithPin: function (identifier) {
+      const clean = String(identifier || '').trim().toLowerCase();
+      const digits = clean.replace(/\D+/g, '').replace(/^1(?=\d{10}$)/, '');
+      const found = MOCK_DB.employees.find(function (e) {
+        if (String(e.Email || '').trim().toLowerCase() === clean) return true;
+        const empDigits = String(e.Phone || '').replace(/\D+/g, '').replace(/^1(?=\d{10}$)/, '');
+        return digits.length >= 7 && empDigits === digits;
+      });
       if (found) MOCK_DB.currentEmpId = found.Employee_ID;
       return MOCK_API.bootstrapApp('mock');
     },
@@ -3036,7 +3050,7 @@
     saveOwner: function (t, p) { MOCK_DB.owners.push(Object.assign({ Owner_ID: p.ownerId || ('OWN-' + Date.now()) }, { Owner_Name: p.ownerName, Email: p.email, Billing_Mode: p.billingMode, Mgmt_Fee_Pct: p.mgmtFeePct })); return { ok: true }; },
     saveProperty: function (t, p) { MOCK_DB.properties.push({ Property_ID: 'PROP-' + Date.now(), Property_Name: p.propertyName, Owner_ID: p.ownerId, Address: p.address, Unit_Type: p.unitType, Default_Lease_Cycle: p.defaultLeaseCycle }); return { ok: true }; },
     saveTask: function (t, p) { MOCK_DB.tasks.push({ Task_ID: 'TSK-' + Date.now(), Task_Name: p.taskName, Default_Billable_Rate: Number(p.defaultBillableRate), Default_Billing_Unit: p.defaultBillingUnit }); return { ok: true }; },
-    saveEmployee: function (t, p) { MOCK_DB.employees.push({ Employee_ID: 'EMP-' + Date.now(), Name: p.name, Email: p.email, Role: p.role, Pay_Type: p.payType, Default_Pay_Rate: Number(p.defaultPayRate), Has_Pin: Boolean(p.newPin) }); return { ok: true }; },
+    saveEmployee: function (t, p) { MOCK_DB.employees.push({ Employee_ID: 'EMP-' + Date.now(), Name: p.name, Email: p.email || '', Phone: p.phone || '', Role: p.role, Pay_Type: p.payType, Default_Pay_Rate: Number(p.defaultPayRate), Has_Pin: Boolean(p.newPin) }); return { ok: true }; },
     saveBillingRate: function (t, p) { MOCK_DB.billingRates.push({ Rate_ID: 'RT-' + Date.now(), Scope_Type: p.scopeType, Scope_ID: p.scopeId, Scope_Name: p.scopeName, Task_Name: p.taskName, Billable_Rate: Number(p.billableRate) }); return { ok: true }; },
     deleteBillingRate: function () { return { ok: true }; },
     importBulkRecords: function (t, p) { return { ok: true, imported: (p.rows || []).length }; },

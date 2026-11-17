@@ -15,7 +15,7 @@ Welcome to your **Butler Property Management (`BPM`)** operations platform. This
 
 ### First-Time Owner Checklist (2 Minutes)
 1. **Authorize Script Permissions (One Time):** Open the **Apps Script Project** link above, select `setupDatabase` in the top dropdown, click **Run**, and approve **Review Permissions -> Allow** under `BGross19@gmail.com`. (This lets tenants submit requests via `?view=request` and lets the app send emails and create PDFs on your behalf.)
-2. **Sign In & Set Your Quick PIN:** Open the **BPM Web App** link, switch to **Email Code (OTP)**, enter `BGross19@gmail.com`, and verify with the 6-digit email code. Set a 4–8 digit **Quick PIN** — your browser stays signed in for **30 days**.
+2. **Sign In & Set Your Quick PIN:** Open the **BPM Web App** link, switch to **Email Code (OTP)**, enter `BGross19@gmail.com`, and verify with the 6-digit email code. Set a 4–8 digit **Quick PIN** — your browser stays signed in for **30 days**. Team members added with a **Phone Number** (or email) and a **4–8 digit PIN** can sign in anytime on the **PIN Sign-In** tab with either their email or phone number + PIN.
 3. **Configure Payment Link & Weekly Automation:** Inside **Settings -> Company & Automation**, add your Venmo/Zelle/Stripe **Payment Link** (`PAYMENT_URL`) if you have one, update your phone/address, click **Save Settings**, and click **Enable Automated Triggers**.
 
 ---
@@ -104,7 +104,7 @@ Inside **Settings**:
 - **Company & Automation**: Edit business info, default grace day (`5th`), late fee (`$50`), default management fee (`8%`), material markup (`%`), invoice due terms (`15 days`), and `PAYMENT_URL`.
   - **Monday 7:00 AM Digest Email**: Automatically emails your Dispatch Email a Monday morning checklist of any Emergency Work Orders, Completed-Unbilled tickets, Pending Approvals, Unbilled Revenue Ready, Overdue Invoices, and Past-Due Rent.
   - **Sunday 2:00 AM Safe Archive**: Moves **only closed, billed, and paid** records older than **90 days** into the `archive_*` sheets to keep the app fast forever — open or unbilled items are **never** archived.
-- **Owners / Properties / Tasks & Rates / Team & PINs**: Add or edit owners (`Direct Invoice` vs. `Monthly Settlement`), properties (`Aliases`, gate/lockbox notes), standard tasks, custom **Scope Rate Overrides**, and team members / reset PINs.
+- **Owners / Properties / Tasks & Rates / Team & PINs**: Add or edit owners (`Direct Invoice` vs. `Monthly Settlement`), properties (`Aliases`, gate/lockbox notes), standard tasks, custom **Scope Rate Overrides**, and team members (with Email, Phone Number, or both) / reset 4–8 digit PINs.
 - **Bulk Import**: Paste CSV/spreadsheet rows or upload a `.csv` file to batch-add Properties, Tasks, Owners, or Employees with a live validation preview before saving.
 
 ---
