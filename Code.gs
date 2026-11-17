@@ -1502,8 +1502,24 @@ function submitWorkEntry(token, payload) {
   if (!payload) throw new Error('Work entry payload required.');
 
   return withScriptLock(function () {
-    const prop = findPropertyRecord(payload.propertyId, payload.propertyName);
-    if (!prop) throw new Error('Please select a valid property.');
+    const isOfficeWork = Boolean(payload.isOfficeWork) || String(payload.propertyId || '').trim().toUpperCase() === 'OFFICE';
+    let newlyCreatedProp = null;
+    let prop = null;
+
+    if (isOfficeWork) {
+      prop = { Property_ID: 'OFFICE', Property_Name: 'Office / Admin', Owner_ID: '', Owner_Name: 'BPM Internal' };
+    } else {
+      prop = findPropertyRecord(payload.propertyId, payload.propertyName);
+      if (!prop && payload.createNewProperty && String(payload.propertyName || '').trim()) {
+        const created = createPropertyInternal(user.email || user.phone || user.name, {
+          propertyName: payload.propertyName,
+          ownerId: isAdminRole(user.role) ? payload.ownerId : ''
+        });
+        prop = created.property;
+        if (created.created) newlyCreatedProp = prop;
+      }
+    }
+    if (!prop) throw new Error('Please select a property, create a new property, or choose Office / Admin.');
 
     const targetEmpId = isAdminRole(user.role) && payload.employeeId ? String(payload.employeeId) : user.employeeId;
     const emp = findEmployeeById(targetEmpId);
@@ -1511,7 +1527,9 @@ function submitWorkEntry(token, payload) {
 
     const settings = getSettingsMap();
     const ownersTbl = getTableData('dim_Owners');
-    const owner = ownersTbl.rows.find(function (o) { return String(o.Owner_ID) === String(prop.Owner_ID); }) || {};
+    const owner = prop.Owner_ID
+      ? (ownersTbl.rows.find(function (o) { return String(o.Owner_ID) === String(prop.Owner_ID); }) || {})
+      : {};
 
     const workType = ['Time', 'Flat', 'Expense Only'].indexOf(payload.workType) !== -1
       ? payload.workType
@@ -1531,10 +1549,10 @@ function submitWorkEntry(token, payload) {
     }
 
     const workDate = toYmd(payload.workDate) || todayYmd();
-    const chargeTarget = ['Owner', 'Tenant', 'BPM Internal'].indexOf(payload.chargeTarget) !== -1
-      ? payload.chargeTarget
-      : 'Owner';
-    const woId = String(payload.woId || '').trim();
+    const chargeTarget = isOfficeWork
+      ? 'BPM Internal'
+      : (['Owner', 'Tenant', 'BPM Internal'].indexOf(payload.chargeTarget) !== -1 ? payload.chargeTarget : 'Owner');
+    const woId = isOfficeWork ? '' : String(payload.woId || '').trim();
     let createdLog = null;
 
     // Only write a fact_Work_Logs row if there is actual labor time or a flat labor charge
@@ -1547,20 +1565,22 @@ function submitWorkEntry(token, payload) {
             : (emp.Pay_Type === 'Flat/1099' ? empRate : round2(hours * empRate)))
         : round2(hours * empRate);
 
-      const rateInfo = resolveBillableRate({
-        propertyId: prop.Property_ID,
-        propertyName: prop.Property_Name,
-        ownerId: prop.Owner_ID,
-        employeeId: emp.Employee_ID,
-        taskName: payload.taskName || 'General Maintenance',
-        hours: hours || 1,
-        workType: workType,
-        customCharge: isAdminRole(user.role) ? payload.customCharge : ''
-      }, {
-        settings: settings,
-        owners: ownersTbl.rows,
-        employees: [emp]
-      });
+      const rateInfo = isOfficeWork
+        ? { billableRate: 0, calculatedBillable: 0, rateSource: 'Office / Internal' }
+        : resolveBillableRate({
+            propertyId: prop.Property_ID,
+            propertyName: prop.Property_Name,
+            ownerId: prop.Owner_ID,
+            employeeId: emp.Employee_ID,
+            taskName: payload.taskName || 'General Maintenance',
+            hours: hours || 1,
+            workType: workType,
+            customCharge: isAdminRole(user.role) ? payload.customCharge : ''
+          }, {
+            settings: settings,
+            owners: ownersTbl.rows,
+            employees: [emp]
+          });
 
       const autoApprove = isAdminRole(user.role) && Boolean(payload.autoApprove);
       createdLog = {
@@ -1572,7 +1592,7 @@ function submitWorkEntry(token, payload) {
         Employee_Name: emp.Name,
         Property_ID: prop.Property_ID,
         Property_Name: prop.Property_Name,
-        Task_Name: String(payload.taskName || 'General Maintenance'),
+        Task_Name: String(payload.taskName || (isOfficeWork ? 'Inspection / Administrative' : 'General Maintenance')),
         Hours: hours,
         Start_Time: String(payload.startTime || ''),
         End_Time: String(payload.endTime || ''),
@@ -1587,11 +1607,11 @@ function submitWorkEntry(token, payload) {
         Charge_Target: chargeTarget,
         Billable_Rate: rateInfo.billableRate,
         Calculated_Billable: rateInfo.calculatedBillable,
-        Charge_Amount_Custom: isAdminRole(user.role) && payload.customCharge !== undefined && payload.customCharge !== ''
+        Charge_Amount_Custom: (!isOfficeWork && isAdminRole(user.role) && payload.customCharge !== undefined && payload.customCharge !== '')
           ? round2(toNum(payload.customCharge, 0))
           : '',
         Rate_Source: rateInfo.rateSource,
-        Edited_By: user.email,
+        Edited_By: user.email || user.phone || user.name,
         Edited_At: ''
       };
       appendRecords('fact_Work_Logs', [createdLog]);
@@ -1614,9 +1634,9 @@ function submitWorkEntry(token, payload) {
       const markupPct = (isAdminRole(user.role) && m.markupPct !== undefined && m.markupPct !== '')
         ? toNum(m.markupPct, defaultMarkup)
         : defaultMarkup;
-      const mTarget = ['Owner', 'Tenant', 'BPM Internal'].indexOf(m.chargeTarget) !== -1
-        ? m.chargeTarget
-        : chargeTarget;
+      const mTarget = isOfficeWork
+        ? 'BPM Internal'
+        : (['Owner', 'Tenant', 'BPM Internal'].indexOf(m.chargeTarget) !== -1 ? m.chargeTarget : chargeTarget);
       const billableAmount = mTarget === 'BPM Internal' ? 0 : round2(totalCost * (1 + markupPct / 100));
       const paidBy = (m.paidBy === 'Employee Out-of-Pocket' || m.paidBy === 'Stock') ? m.paidBy : 'Company Account/Card';
 
@@ -1693,7 +1713,8 @@ function submitWorkEntry(token, payload) {
     return sanitizeForWire({
       ok: true,
       workLog: createdLog,
-      materials: createdMaterials
+      materials: createdMaterials,
+      createdProperty: newlyCreatedProp
     });
   });
 }
@@ -1724,13 +1745,13 @@ function updateWorkLogEntry(token, payload) {
       if (String(existing.Employee_ID) !== user.employeeId) {
         throw new Error('FORBIDDEN: You can only edit your own entries.');
       }
-      if (existing.Payroll_Status !== 'Pending' || existing.Billing_Status !== 'Unbilled') {
+      if (existing.Payroll_Status !== 'Pending' || (existing.Billing_Status !== 'Unbilled' && existing.Billing_Status !== 'Internal/Non-Billable')) {
         throw new Error('Approved, paid, or invoiced entries can only be modified by an Owner/Admin.');
       }
     }
 
     const patch = {
-      Edited_By: user.email,
+      Edited_By: user.email || user.phone || user.name,
       Edited_At: nowIso()
     };
     if (payload.workDate) patch.Work_Date = toYmd(payload.workDate);
@@ -1738,7 +1759,10 @@ function updateWorkLogEntry(token, payload) {
     if (payload.taskName) patch.Task_Name = String(payload.taskName);
     if (payload.woId !== undefined) patch.WO_ID = String(payload.woId);
 
-    if (payload.propertyId || payload.propertyName) {
+    if (String(payload.propertyId || '').trim().toUpperCase() === 'OFFICE') {
+      patch.Property_ID = 'OFFICE';
+      patch.Property_Name = 'Office / Admin';
+    } else if (payload.propertyId || payload.propertyName) {
       const prop = findPropertyRecord(payload.propertyId, payload.propertyName);
       if (prop) {
         patch.Property_ID = prop.Property_ID;
@@ -1815,7 +1839,7 @@ function updateMaterialExpense(token, payload) {
     const admin = isAdminRole(user.role);
     if (!admin) {
       if (String(existing.Employee_ID) !== user.employeeId) throw new Error('FORBIDDEN');
-      if (existing.Billing_Status !== 'Unbilled' || existing.Payroll_Status === 'Paid' || existing.Payroll_Status === 'Approved') {
+      if ((existing.Billing_Status !== 'Unbilled' && existing.Billing_Status !== 'Internal/Non-Billable') || existing.Payroll_Status === 'Paid' || existing.Payroll_Status === 'Approved') {
         throw new Error('Locked expense can only be edited by Admin/Owner.');
       }
     }
@@ -3718,9 +3742,61 @@ function saveOwner(token, payload) {
   });
 }
 
+function createPropertyInternal(actorLabel, payload) {
+  const cleanName = String((payload && payload.propertyName) || '').trim();
+  if (!cleanName) throw new Error('Property name is required.');
+  const existing = findPropertyRecord('', cleanName);
+  if (existing) {
+    return { created: false, property: existing };
+  }
+  const owners = getTableData('dim_Owners').rows;
+  const fallbackOwner = owners.find(function (o) { return toBool(o.Status, true); }) || owners[0] || {};
+  const owner = (payload && payload.ownerId)
+    ? (owners.find(function (o) { return String(o.Owner_ID) === String(payload.ownerId); }) || fallbackOwner)
+    : fallbackOwner;
+  const rec = {
+    Property_ID: newId('PROP'),
+    Property_Name: cleanName,
+    Owner_ID: String(owner.Owner_ID || ''),
+    Owner_Name: String((payload && payload.ownerName) || owner.Owner_Name || ''),
+    Address: String((payload && payload.address) || cleanName),
+    Unit_Type: String((payload && payload.unitType) || 'Student House'),
+    Billing_Mode_Override: String((payload && payload.billingModeOverride) || ''),
+    Mgmt_Fee_Override_Pct: payload && payload.mgmtFeeOverridePct !== '' && payload.mgmtFeeOverridePct !== undefined
+      ? toNum(payload.mgmtFeeOverridePct, '')
+      : '',
+    Default_Lease_Cycle: payload && payload.defaultLeaseCycle === 'Calendar' ? 'Calendar' : 'Academic',
+    Aliases: String((payload && payload.aliases) || ''),
+    Gate_Lock_Notes: String((payload && payload.gateLockNotes) || ''),
+    Status: String((payload && payload.status) || 'Active')
+  };
+  appendRecords('Properties', [rec]);
+  addAuditLog(actorLabel || 'system', 'QUICK_CREATE_PROPERTY', 'Property', rec.Property_ID, rec.Property_Name);
+  return { created: true, property: rec };
+}
+
+function quickCreateProperty(token, payload) {
+  const user = requireAuth(token);
+  return withScriptLock(function () {
+    const res = createPropertyInternal(user.email || user.phone || user.name, {
+      propertyName: payload && payload.propertyName,
+      ownerId: isAdminRole(user.role) && payload ? payload.ownerId : ''
+    });
+    return sanitizeForWire({
+      ok: true,
+      created: res.created,
+      property: res.property
+    });
+  });
+}
+
 function saveProperty(token, payload) {
   const user = requireAuth(token, ['Owner', 'Admin']);
   return withScriptLock(function () {
+    if (!payload.propertyId) {
+      const created = createPropertyInternal(user.email || user.phone || user.name, payload);
+      return sanitizeForWire(created.property);
+    }
     const owners = getTableData('dim_Owners').rows;
     const owner = owners.find(function (o) { return String(o.Owner_ID) === String(payload.ownerId); }) || {};
     const rec = {
@@ -3737,14 +3813,8 @@ function saveProperty(token, payload) {
       Status: String(payload.status || 'Active')
     };
     if (!rec.Property_Name) throw new Error('Property name is required.');
-    let saved;
-    if (payload.propertyId) {
-      saved = updateRowById('Properties', 'Property_ID', payload.propertyId, rec);
-    } else {
-      saved = Object.assign({ Property_ID: newId('PROP') }, rec);
-      appendRecords('Properties', [saved]);
-    }
-    addAuditLog(user.email, payload.propertyId ? 'UPDATE_PROPERTY' : 'CREATE_PROPERTY', 'Property', saved.Property_ID, rec.Property_Name);
+    const saved = updateRowById('Properties', 'Property_ID', payload.propertyId, rec);
+    addAuditLog(user.email || user.phone || user.name, 'UPDATE_PROPERTY', 'Property', saved.Property_ID, rec.Property_Name);
     return sanitizeForWire(saved);
   });
 }

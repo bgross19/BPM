@@ -50,6 +50,10 @@ Under **+ Log Work / Receipt** or **Time & Expenses**, you and your crew can rec
 - **Flat-Rate Job**: Overrides hourly billing with an agreed flat client charge (for example, a `$150` flat drain snake or turnover fee).
 
 Key billing and reimbursement controls on every entry:
+- **Property Autocomplete, New Property & Office / Admin Work**:
+  - Start typing in **Property / Location** to auto-complete any listed property by name, address, or alias.
+  - If a house isn't listed yet, click **+ Create new property** right in the dropdown to add it on the spot.
+  - For office paperwork, supply runs, or administrative tasks not tied to a rental house, click **Office / Admin (No House)** — the entry still counts toward crew hours/payroll, while automatically marking billing `BPM Internal (Non-Billable)` so no property owner gets charged.
 - **Paid By**:
   - **Company Account / Card**: Client-billable material, **not** reimbursed to crew in payroll.
   - **Employee Out-of-Pocket**: Client-billable material **and** queued into the employee's next payroll run once approved.

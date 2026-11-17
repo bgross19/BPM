@@ -11,6 +11,7 @@
     boot: null,
     activeTab: '',
     entryMode: 'Time',
+    weAutoInternal: false,
     billingSubtab: 'unbilled',
     settingsSubtab: 'company',
     workOrders: [],
@@ -698,19 +699,179 @@
       empSel.innerHTML = '<option value="' + esc(STATE.user.employeeId) + '">' + esc(STATE.user.name) + '</option>';
     }
 
-    const propOpts = '<option value="">Select property...</option>' + (b.properties || []).map(function (p) {
-      return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
-    }).join('');
-    document.getElementById('we-property').innerHTML = propOpts;
-    document.getElementById('we-filter-prop').innerHTML = '<option value="">All Properties</option>' + (b.properties || []).map(function (p) {
-      return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
-    }).join('');
+    selectWorkEntryProperty('', '');
+    const filterProp = document.getElementById('we-filter-prop');
+    const prevFilter = filterProp.value;
+    filterProp.innerHTML = '<option value="">All Properties</option>' +
+      '<option value="OFFICE">Office / Admin (No House)</option>' +
+      (b.properties || []).map(function (p) {
+        return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
+      }).join('');
+    if (prevFilter) filterProp.value = prevFilter;
 
     document.getElementById('we-task').innerHTML = (b.tasks || []).map(function (t) {
       return '<option value="' + esc(t.Task_Name) + '">' + esc(t.Task_Name) + '</option>';
     }).join('');
 
     setEntryMode('Time');
+  }
+
+  function registerNewPropertyClientSide(prop) {
+    if (!prop || !prop.Property_ID) return;
+    STATE.boot = STATE.boot || {};
+    STATE.boot.properties = STATE.boot.properties || [];
+    const exists = STATE.boot.properties.some(function (p) { return p.Property_ID === prop.Property_ID; });
+    if (!exists) {
+      STATE.boot.properties.push(prop);
+      STATE.boot.properties.sort(function (a, b) {
+        return String(a.Property_Name || '').localeCompare(String(b.Property_Name || ''));
+      });
+    }
+    if (STATE.boot.allProperties && !STATE.boot.allProperties.some(function (p) { return p.Property_ID === prop.Property_ID; })) {
+      STATE.boot.allProperties.push(prop);
+    }
+    STATE.byId.prop[prop.Property_ID] = prop;
+
+    const filterProp = document.getElementById('we-filter-prop');
+    if (filterProp) {
+      const prev = filterProp.value;
+      filterProp.innerHTML = '<option value="">All Properties</option>' +
+        '<option value="OFFICE">Office / Admin (No House)</option>' +
+        STATE.boot.properties.map(function (p) {
+          return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
+        }).join('');
+      if (prev) filterProp.value = prev;
+    }
+    const woProp = document.getElementById('wo-filter-prop');
+    if (woProp) {
+      const wPrev = woProp.value;
+      woProp.innerHTML = '<option value="">All Properties</option>' +
+        STATE.boot.properties.map(function (p) {
+          return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
+        }).join('');
+      if (wPrev) woProp.value = wPrev;
+    }
+  }
+
+  function setOfficeTargetLock(isOffice) {
+    const targetEl = document.getElementById('we-charge-target');
+    const officeBtn = document.getElementById('we-office-btn');
+    if (officeBtn) {
+      officeBtn.className = isOffice
+        ? 'text-[11px] font-semibold bg-indigo-100 text-indigo-900 border border-indigo-300 px-2 py-0.5 rounded-md transition'
+        : 'text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 px-1.5 py-0.5 rounded transition';
+    }
+    if (targetEl) {
+      Array.prototype.forEach.call(targetEl.options, function (opt) {
+        opt.disabled = isOffice && opt.value !== 'BPM Internal';
+      });
+      if (isOffice) {
+        targetEl.value = 'BPM Internal';
+        STATE.weAutoInternal = true;
+      } else if (STATE.weAutoInternal) {
+        targetEl.value = 'Owner';
+        STATE.weAutoInternal = false;
+      }
+    }
+  }
+
+  function selectWorkEntryProperty(propId, displayLabel) {
+    const idEl = document.getElementById('we-property');
+    const inputEl = document.getElementById('we-property-input');
+    const clearBtn = document.getElementById('we-property-clear');
+    const ddEl = document.getElementById('we-property-dropdown');
+    if (idEl) idEl.value = propId || '';
+    if (inputEl) inputEl.value = displayLabel || '';
+    if (clearBtn) clearBtn.classList.toggle('hidden', !(displayLabel || propId));
+    if (ddEl) ddEl.classList.add('hidden');
+
+    const isOffice = propId === 'OFFICE';
+    setOfficeTargetLock(isOffice);
+    if (isOffice) {
+      const woEl = document.getElementById('we-wo');
+      if (woEl && woEl.value) {
+        woEl.value = '';
+        const completeWrap = document.getElementById('we-complete-wo-wrap');
+        if (completeWrap) completeWrap.classList.add('hidden');
+      }
+      const taskEl = document.getElementById('we-task');
+      if (taskEl) {
+        const hasAdminTask = Array.prototype.some.call(taskEl.options, function (o) {
+          return o.value === 'Inspection / Administrative';
+        });
+        if (hasAdminTask) taskEl.value = 'Inspection / Administrative';
+      }
+    }
+  }
+
+  function renderWePropertyDropdown(rawQuery) {
+    const dd = document.getElementById('we-property-dropdown');
+    if (!dd) return;
+    const props = (STATE.boot && STATE.boot.properties) || [];
+    const qRaw = String(rawQuery || '').trim();
+    const q = qRaw.toLowerCase();
+
+    let html = '';
+    const showOffice = !q ||
+      'office / admin (no house)'.indexOf(q) !== -1 ||
+      'administrative'.indexOf(q) !== -1 ||
+      'internal'.indexOf(q) !== -1;
+
+    if (showOffice) {
+      html += '<button type="button" data-action="set-office-work" class="w-full text-left px-3 py-2.5 bg-indigo-50/70 hover:bg-indigo-100/80 flex items-center justify-between gap-2">' +
+        '<div><div class="font-bold text-indigo-900"><i class="fas fa-building mr-1.5"></i>Office / Admin (No House)</div>' +
+        '<div class="text-[10px] text-indigo-700">Internal office or admin time/expense — excluded from owner billing</div></div>' +
+        '<span class="badge-pill bg-indigo-100 text-indigo-800 shrink-0">Internal</span></button>';
+    }
+
+    const matches = props.filter(function (p) {
+      if (!q) return true;
+      return String(p.Property_Name || '').toLowerCase().indexOf(q) !== -1 ||
+        String(p.Address || '').toLowerCase().indexOf(q) !== -1 ||
+        String(p.Aliases || '').toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 60);
+
+    matches.forEach(function (p) {
+      const sub = [p.Address && p.Address !== p.Property_Name ? p.Address : '', p.Owner_Name || ''].filter(Boolean).join(' • ');
+      html += '<button type="button" data-action="pick-we-property" data-id="' + esc(p.Property_ID) + '" data-name="' + esc(p.Property_Name) + '" class="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between gap-2">' +
+        '<div><div class="font-semibold text-slate-900">' + esc(p.Property_Name) + '</div>' +
+        (sub ? '<div class="text-[10px] text-slate-400">' + esc(sub) + '</div>' : '') + '</div>' +
+        (p.Unit_Type ? '<span class="text-[10px] text-slate-400 shrink-0">' + esc(p.Unit_Type) + '</span>' : '') +
+        '</button>';
+    });
+
+    const exactMatch = props.some(function (p) {
+      return String(p.Property_Name || '').trim().toLowerCase() === q;
+    });
+    const isOfficeLabel = q === 'office / admin (no house)' || q === 'office / admin' || q === 'office';
+    if (qRaw && !exactMatch && !isOfficeLabel) {
+      html += '<button type="button" data-action="create-we-property" data-name="' + esc(qRaw) + '" class="w-full text-left px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold flex items-center gap-2">' +
+        '<i class="fas fa-plus-circle text-emerald-700"></i><span>Create new property: &ldquo;' + esc(qRaw) + '&rdquo;</span></button>';
+    }
+
+    if (!html) {
+      html = '<div class="px-3 py-3 text-center text-slate-400">Type a property name to search or create one</div>';
+    }
+    dd.innerHTML = html;
+    dd.classList.remove('hidden');
+  }
+
+  async function handleQuickCreateWeProperty(rawName) {
+    const cleanName = String(rawName || '').trim();
+    if (!cleanName) return;
+    setLoading(true, 'Adding property...');
+    try {
+      const res = await apiCall('quickCreateProperty', STATE.token, { propertyName: cleanName });
+      if (res && res.property) {
+        registerNewPropertyClientSide(res.property);
+        selectWorkEntryProperty(res.property.Property_ID, res.property.Property_Name);
+        showToast((res.created ? 'Created property: ' : 'Selected existing property: ') + res.property.Property_Name, 'success');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function refreshWoDropdownInTimeForm() {
@@ -796,28 +957,70 @@
     });
 
     const isAdmin = STATE.user && (STATE.user.role === 'Owner' || STATE.user.role === 'Admin');
+    let propId = document.getElementById('we-property').value;
+    const typedProp = String(document.getElementById('we-property-input').value || '').trim();
+    let isOfficeWork = propId === 'OFFICE';
+    let createNewProperty = false;
+    let propertyName = typedProp;
+
+    if (!isOfficeWork && !propId) {
+      const qLower = typedProp.toLowerCase();
+      if (qLower === 'office / admin (no house)' || qLower === 'office / admin' || qLower === 'office') {
+        isOfficeWork = true;
+        propId = 'OFFICE';
+        propertyName = 'Office / Admin';
+      } else if (typedProp) {
+        const props = (STATE.boot && STATE.boot.properties) || [];
+        const matched = props.find(function (p) {
+          if (String(p.Property_Name || '').trim().toLowerCase() === qLower) return true;
+          const aliases = String(p.Aliases || '').split(',').map(function (a) { return a.trim().toLowerCase(); });
+          return aliases.indexOf(qLower) !== -1;
+        });
+        if (matched) {
+          propId = matched.Property_ID;
+          propertyName = matched.Property_Name;
+        } else {
+          if (!confirm('Property "' + typedProp + '" is not in the list yet. Create it as a new property and save this entry?')) {
+            return;
+          }
+          createNewProperty = true;
+        }
+      }
+    }
+    if (!isOfficeWork && !propId && !createNewProperty) {
+      showToast('Please select a property, create a new one, or choose Office / Admin.', 'error');
+      return;
+    }
+
     const payload = {
       workType: STATE.entryMode,
       employeeId: document.getElementById('we-employee').value,
-      propertyId: document.getElementById('we-property').value,
-      woId: document.getElementById('we-wo').value,
+      propertyId: propId,
+      propertyName: propertyName,
+      isOfficeWork: isOfficeWork,
+      createNewProperty: createNewProperty,
+      woId: isOfficeWork ? '' : document.getElementById('we-wo').value,
       workDate: document.getElementById('we-date').value,
       taskName: document.getElementById('we-task').value,
       hours: STATE.entryMode === 'Expense Only' ? 0 : (STATE.entryMode === 'Flat' ? 1 : document.getElementById('we-hours').value),
       startTime: document.getElementById('we-start-time').value,
       endTime: document.getElementById('we-end-time').value,
       flatPayAmount: document.getElementById('we-flat-pay').value,
-      chargeTarget: document.getElementById('we-charge-target').value,
-      customCharge: isAdmin ? document.getElementById('we-custom-charge').value : '',
+      chargeTarget: isOfficeWork ? 'BPM Internal' : document.getElementById('we-charge-target').value,
+      customCharge: (!isOfficeWork && isAdmin) ? document.getElementById('we-custom-charge').value : '',
       notes: document.getElementById('we-notes').value,
-      markWoCompleted: document.getElementById('we-complete-wo').checked,
+      markWoCompleted: !isOfficeWork && document.getElementById('we-complete-wo').checked,
       materials: materials,
       autoApprove: isAdmin && document.getElementById('we-employee').value === STATE.user.employeeId
     };
 
     setLoading(true, 'Recording work entry...');
     try {
-      await apiCall('submitWorkEntry', STATE.token, payload);
+      const res = await apiCall('submitWorkEntry', STATE.token, payload);
+      if (res && res.createdProperty) {
+        registerNewPropertyClientSide(res.createdProperty);
+      }
+      selectWorkEntryProperty('', '');
       document.getElementById('we-notes').value = '';
       document.getElementById('we-custom-charge').value = '';
       document.getElementById('we-materials-list').innerHTML = '';
@@ -2398,9 +2601,44 @@
       weWo.addEventListener('change', function () {
         const w = STATE.byId.wo[weWo.value];
         document.getElementById('we-complete-wo-wrap').classList.toggle('hidden', !weWo.value);
-        if (w && w.Property_ID) document.getElementById('we-property').value = w.Property_ID;
+        if (w && w.Property_ID) selectWorkEntryProperty(w.Property_ID, w.Property_Name || '');
       });
     }
+    const wePropInput = document.getElementById('we-property-input');
+    const wePropWrap = document.getElementById('we-property-wrap');
+    if (wePropInput) {
+      wePropInput.addEventListener('focus', function () {
+        renderWePropertyDropdown(wePropInput.value);
+      });
+      wePropInput.addEventListener('input', function () {
+        const q = wePropInput.value.trim().toLowerCase();
+        const clearBtn = document.getElementById('we-property-clear');
+        if (clearBtn) clearBtn.classList.toggle('hidden', !wePropInput.value);
+        const props = (STATE.boot && STATE.boot.properties) || [];
+        const exact = props.find(function (p) { return String(p.Property_Name || '').trim().toLowerCase() === q; });
+        const hiddenIdEl = document.getElementById('we-property');
+        if (exact) {
+          if (hiddenIdEl) hiddenIdEl.value = exact.Property_ID;
+          setOfficeTargetLock(false);
+        } else {
+          if (hiddenIdEl) hiddenIdEl.value = '';
+          setOfficeTargetLock(false);
+        }
+        renderWePropertyDropdown(wePropInput.value);
+      });
+      wePropInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') {
+          const dd = document.getElementById('we-property-dropdown');
+          if (dd) dd.classList.add('hidden');
+        }
+      });
+    }
+    document.addEventListener('click', function (ev) {
+      if (wePropWrap && !wePropWrap.contains(ev.target)) {
+        const dd = document.getElementById('we-property-dropdown');
+        if (dd) dd.classList.add('hidden');
+      }
+    });
     ['we-start-time', 'we-end-time'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) {
@@ -2562,6 +2800,19 @@
         }, 120);
       } else if (action === 'set-entry-mode') {
         setEntryMode(btn.getAttribute('data-mode'));
+      } else if (action === 'set-office-work') {
+        selectWorkEntryProperty('OFFICE', 'Office / Admin (No House)');
+      } else if (action === 'clear-we-property') {
+        selectWorkEntryProperty('', '');
+        const inp = document.getElementById('we-property-input');
+        if (inp) {
+          inp.focus();
+          renderWePropertyDropdown('');
+        }
+      } else if (action === 'pick-we-property') {
+        selectWorkEntryProperty(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+      } else if (action === 'create-we-property') {
+        await handleQuickCreateWeProperty(btn.getAttribute('data-name'));
       } else if (action === 'add-material-line') {
         addMaterialLine();
       } else if (action === 'approve-selected-entries') {
@@ -2828,40 +3079,64 @@
       MOCK_DB.workOrders.unshift(nw);
       return nw;
     },
+    quickCreateProperty: function (t, p) {
+      const clean = String((p && p.propertyName) || '').trim();
+      const existing = MOCK_DB.properties.find(function (r) {
+        return String(r.Property_Name || '').toLowerCase() === clean.toLowerCase();
+      });
+      if (existing) return { ok: true, created: false, property: existing };
+      const np = { Property_ID: 'PROP-' + (Date.now() % 10000), Property_Name: clean, Owner_ID: 'OWN-001', Owner_Name: 'Butler Portfolio', Address: clean, Unit_Type: 'Student House', Default_Lease_Cycle: 'Academic', Status: 'Active' };
+      MOCK_DB.properties.push(np);
+      return { ok: true, created: true, property: np };
+    },
     submitWorkEntry: function (t, p) {
-      const prop = MOCK_DB.properties.find(function (r) { return r.Property_ID === p.propertyId; }) || {};
+      const isOffice = Boolean(p.isOfficeWork) || String(p.propertyId || '').toUpperCase() === 'OFFICE';
+      let createdProp = null;
+      let prop = null;
+      if (isOffice) {
+        prop = { Property_ID: 'OFFICE', Property_Name: 'Office / Admin' };
+      } else {
+        prop = MOCK_DB.properties.find(function (r) { return r.Property_ID === p.propertyId || (p.propertyName && String(r.Property_Name || '').toLowerCase() === String(p.propertyName).trim().toLowerCase()); });
+        if (!prop && p.createNewProperty && p.propertyName) {
+          const qc = MOCK_API.quickCreateProperty(t, { propertyName: p.propertyName });
+          prop = qc.property;
+          createdProp = qc.created ? prop : null;
+        }
+        prop = prop || {};
+      }
+      const chargeTarget = isOffice ? 'BPM Internal' : p.chargeTarget;
       const emp = MOCK_DB.employees.find(function (e) { return e.Employee_ID === p.employeeId; }) || MOCK_DB.employees[0];
       const hrs = p.workType === 'Expense Only' ? 0 : Number(p.hours || 1);
       let logId = '';
       if (p.workType !== 'Expense Only' && hrs > 0) {
         logId = 'LOG-' + (Date.now() % 10000);
         const task = MOCK_DB.tasks.find(function (tk) { return tk.Task_Name === p.taskName; }) || { Default_Billable_Rate: 65 };
-        const calc = hrs * task.Default_Billable_Rate;
+        const calc = isOffice ? 0 : hrs * task.Default_Billable_Rate;
         MOCK_DB.workLogs.unshift({
-          Log_ID: logId, WO_ID: p.woId || '', Work_Date: p.workDate, Employee_ID: emp.Employee_ID, Employee_Name: emp.Name,
+          Log_ID: logId, WO_ID: isOffice ? '' : (p.woId || ''), Work_Date: p.workDate, Employee_ID: emp.Employee_ID, Employee_Name: emp.Name,
           Property_ID: prop.Property_ID, Property_Name: prop.Property_Name, Task_Name: p.taskName, Hours: hrs, Notes: p.notes,
           Work_Type: p.workType, Payroll_Status: p.autoApprove ? 'Approved' : 'Pending', Employee_Rate: emp.Default_Pay_Rate,
-          Gross_Pay: hrs * emp.Default_Pay_Rate, Billing_Status: p.chargeTarget === 'BPM Internal' ? 'Internal/Non-Billable' : 'Unbilled',
-          Charge_Target: p.chargeTarget, Billable_Rate: task.Default_Billable_Rate, Calculated_Billable: calc,
-          Charge_Amount_Custom: p.customCharge || '', Effective_Billable: p.customCharge ? Number(p.customCharge) : calc, Rate_Source: 'Task Default Rate'
+          Gross_Pay: hrs * emp.Default_Pay_Rate, Billing_Status: chargeTarget === 'BPM Internal' ? 'Internal/Non-Billable' : 'Unbilled',
+          Charge_Target: chargeTarget, Billable_Rate: isOffice ? 0 : task.Default_Billable_Rate, Calculated_Billable: calc,
+          Charge_Amount_Custom: isOffice ? '' : (p.customCharge || ''), Effective_Billable: isOffice ? 0 : (p.customCharge ? Number(p.customCharge) : calc), Rate_Source: isOffice ? 'Office / Internal' : 'Task Default Rate'
         });
       }
       (p.materials || []).forEach(function (m, idx) {
         const tc = Number(m.totalCost || 0);
         MOCK_DB.expenses.unshift({
-          Expense_ID: 'EXP-' + ((Date.now() + idx) % 10000), WO_ID: p.woId || '', Log_ID: logId, Expense_Date: p.workDate,
+          Expense_ID: 'EXP-' + ((Date.now() + idx) % 10000), WO_ID: isOffice ? '' : (p.woId || ''), Log_ID: logId, Expense_Date: p.workDate,
           Employee_ID: emp.Employee_ID, Employee_Name: emp.Name, Property_ID: prop.Property_ID, Property_Name: prop.Property_Name,
-          Vendor: m.vendor, Item_Description: m.itemDescription, Total_Cost: tc, Billable_Amount: p.chargeTarget === 'BPM Internal' ? 0 : tc,
-          Paid_By: m.paidBy, Charge_Target: p.chargeTarget,
+          Vendor: m.vendor, Item_Description: m.itemDescription, Total_Cost: tc, Billable_Amount: chargeTarget === 'BPM Internal' ? 0 : tc,
+          Paid_By: m.paidBy, Charge_Target: chargeTarget,
           Payroll_Status: m.paidBy === 'Employee Out-of-Pocket' ? (p.autoApprove ? 'Approved' : 'Pending') : 'N/A',
-          Billing_Status: p.chargeTarget === 'BPM Internal' ? 'Internal/Non-Billable' : 'Unbilled'
+          Billing_Status: chargeTarget === 'BPM Internal' ? 'Internal/Non-Billable' : 'Unbilled'
         });
       });
-      if (p.markWoCompleted && p.woId) {
+      if (!isOffice && p.markWoCompleted && p.woId) {
         const w = MOCK_DB.workOrders.find(function (r) { return r.WO_ID === p.woId; });
         if (w) w.Status = 'Completed';
       }
-      return { ok: true };
+      return { ok: true, createdProperty: createdProp };
     },
     updateWorkLogEntry: function (t, p) {
       const l = MOCK_DB.workLogs.find(function (r) { return r.Log_ID === p.logId; });
