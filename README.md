@@ -53,6 +53,7 @@ Key billing and reimbursement controls on every entry:
 - **Paid By**:
   - **Company Account / Card**: Client-billable material, **not** reimbursed to crew in payroll.
   - **Employee Out-of-Pocket**: Client-billable material **and** queued into the employee's next payroll run once approved.
+  - **Stock**: Material pulled from company shop/truck inventory — client-billable, **not** reimbursed to crew in payroll.
 - **Charge Target**: Defaults to **Owner** (or switch to **Tenant** / **BPM Internal**). Only `BPM Internal` is excluded from client invoicing so billable work never gets skipped accidentally.
 - **Approvals**: Check rows in the **Work & Expense Ledger** and click **Approve Selected** before running payroll.
 

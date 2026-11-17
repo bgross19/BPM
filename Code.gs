@@ -1592,7 +1592,7 @@ function submitWorkEntry(token, payload) {
         ? m.chargeTarget
         : chargeTarget;
       const billableAmount = mTarget === 'BPM Internal' ? 0 : round2(totalCost * (1 + markupPct / 100));
-      const paidBy = m.paidBy === 'Employee Out-of-Pocket' ? 'Employee Out-of-Pocket' : 'Company Account/Card';
+      const paidBy = (m.paidBy === 'Employee Out-of-Pocket' || m.paidBy === 'Stock') ? m.paidBy : 'Company Account/Card';
 
       const expenseId = newId('EXP');
       let receiptUrl = String(m.receiptUrl || '');

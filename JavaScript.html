@@ -756,7 +756,8 @@
       '<div><label class="block text-[10px] font-semibold text-slate-500">Total Cost ($) *</label><input type="number" step="0.01" min="0" name="cost" required placeholder="24.95" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs font-semibold" /></div>' +
       '<div><label class="block text-[10px] font-semibold text-slate-500">Paid By</label><select name="paidBy" class="w-full rounded border border-slate-300 px-2 py-1.5 text-xs bg-white">' +
       '<option value="Company Account/Card">Company Account/Card</option>' +
-      '<option value="Employee Out-of-Pocket">Employee Out-of-Pocket</option></select></div>' +
+      '<option value="Employee Out-of-Pocket">Employee Out-of-Pocket</option>' +
+      '<option value="Stock">Stock</option></select></div>' +
       '<div class="flex items-center gap-1.5">' +
       '<label class="flex-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2 py-1.5 rounded text-center cursor-pointer truncate">' +
       '<i class="fas fa-camera mr-1"></i><span>Receipt</span><input type="file" accept="image/*" class="hidden we-mat-file" /></label>' +
@@ -1019,7 +1020,7 @@
         '<div><label class="block font-semibold mb-1">Total Cost ($)</label><input type="number" step="0.01" name="totalCost" value="' + esc(e.Total_Cost) + '" class="w-full rounded-lg border border-slate-300 px-2.5 py-2" /></div></div>' +
         '<div><label class="block font-semibold mb-1">Description</label><input name="itemDescription" value="' + esc(e.Item_Description || '') + '" class="w-full rounded-lg border border-slate-300 px-2.5 py-2" /></div>' +
         '<div><label class="block font-semibold mb-1">Paid By</label><select name="paidBy" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 bg-white">' +
-        ['Company Account/Card', 'Employee Out-of-Pocket'].map(function (p) { return '<option' + (e.Paid_By === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div>' +
+        ['Company Account/Card', 'Employee Out-of-Pocket', 'Stock'].map(function (p) { return '<option' + (e.Paid_By === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div>' +
         (isAdmin
           ? '<div class="grid grid-cols-3 gap-2 bg-blue-50 p-3 rounded-lg">' +
             '<div><label class="block font-semibold mb-1">Markup %</label><input type="number" step="0.1" name="markupPct" value="' + esc(e.Markup_Pct || 0) + '" class="w-full rounded border border-slate-300 px-2 py-1.5" /></div>' +
@@ -2866,7 +2867,7 @@
       const e = MOCK_DB.expenses.find(function (r) { return r.Expense_ID === p.expenseId; });
       if (e) {
         e.Vendor = p.vendor; e.Item_Description = p.itemDescription; e.Total_Cost = Number(p.totalCost); e.Billable_Amount = e.Total_Cost;
-        e.Paid_By = p.paidBy; if (p.payrollStatus) e.Payroll_Status = p.payrollStatus;
+        e.Paid_By = p.paidBy; if (p.paidBy !== 'Employee Out-of-Pocket') e.Payroll_Status = 'N/A'; else if (p.payrollStatus) e.Payroll_Status = p.payrollStatus;
       }
       return e;
     },
