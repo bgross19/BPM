@@ -4,6 +4,7 @@
 
   const STORAGE_TOKEN_KEY = 'bpm_session_token_v1';
   const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const FRESH_WINDOW_MS = 15000;
 
   const STATE = {
     token: localStorage.getItem(STORAGE_TOKEN_KEY) || '',
@@ -22,6 +23,19 @@
     billingData: null,
     rentData: null,
     payrollData: null,
+    workOrdersLoaded: false,
+    weLoaded: false,
+    _woCacheKey: '',
+    _weCacheKey: '',
+    _rentCacheKey: '',
+    _payrollCacheKey: '',
+    _overviewFreshAt: 0,
+    _woFreshAt: 0,
+    _weFreshAt: 0,
+    _billingFreshAt: 0,
+    _rentFreshAt: 0,
+    _payrollFreshAt: 0,
+    _prefetchTimer: null,
     trendChart: null,
     tenantPhotos: [],
     previewDoc: null,
@@ -226,7 +240,163 @@
     });
   }
 
+  function resetClientViewCaches() {
+    if (STATE._prefetchTimer) {
+      clearTimeout(STATE._prefetchTimer);
+      STATE._prefetchTimer = null;
+    }
+    STATE.workOrders = [];
+    STATE.workLogs = [];
+    STATE.expenses = [];
+    STATE.myPaystubs = [];
+    STATE.adminOverview = null;
+    STATE.billingData = null;
+    STATE.rentData = null;
+    STATE.payrollData = null;
+    STATE.workOrdersLoaded = false;
+    STATE.weLoaded = false;
+    STATE._woCacheKey = '';
+    STATE._weCacheKey = '';
+    STATE._rentCacheKey = '';
+    STATE._payrollCacheKey = '';
+    invalidateClientDataCache();
+  }
+
+  function invalidateClientDataCache() {
+    STATE._overviewFreshAt = 0;
+    STATE._woFreshAt = 0;
+    STATE._weFreshAt = 0;
+    STATE._billingFreshAt = 0;
+    STATE._rentFreshAt = 0;
+    STATE._payrollFreshAt = 0;
+  }
+
+  function onDataMutated() {
+    invalidateClientDataCache();
+    scheduleWorkspacePrefetch(250);
+  }
+
+  function scheduleWorkspacePrefetch(delayMs) {
+    if (!STATE.token || !STATE.user) return;
+    if (STATE._prefetchTimer) clearTimeout(STATE._prefetchTimer);
+    STATE._prefetchTimer = setTimeout(function () {
+      STATE._prefetchTimer = null;
+      runWorkspacePrefetch();
+    }, typeof delayMs === 'number' ? delayMs : 150);
+  }
+
+  async function runWorkspacePrefetch() {
+    const tok = STATE.token;
+    if (!tok || !STATE.user) return;
+    const startedAt = Date.now();
+    const isAdmin = STATE.user.role === 'Owner' || STATE.user.role === 'Admin';
+    const rentCycleEl = document.getElementById('rent-cycle-type');
+    const rentLabelEl = document.getElementById('rent-cycle-label');
+    const prStartEl = document.getElementById('payroll-start-date');
+    const prEndEl = document.getElementById('payroll-end-date');
+    const rentCycleType = rentCycleEl ? rentCycleEl.value : 'Academic';
+    const rentCycleLabel = rentLabelEl ? rentLabelEl.value : '26-27';
+    const payrollStartDate = prStartEl ? prStartEl.value : '';
+    const payrollEndDate = prEndEl ? prEndEl.value : '';
+
+    try {
+      const bundle = await apiCall('prefetchWorkspaceBundle', tok, {
+        woStatus: 'Open',
+        woUrgency: 'All',
+        rentCycleType: rentCycleType,
+        rentCycleLabel: rentCycleLabel,
+        payrollStartDate: payrollStartDate,
+        payrollEndDate: payrollEndDate
+      });
+      if (!bundle || !STATE.token || STATE.token !== tok) return;
+
+      if (Array.isArray(bundle.workOrders) && STATE._woFreshAt < startedAt) {
+        const curWoStatus = (document.getElementById('wo-filter-status') || {}).value || 'Open';
+        const curWoUrg = (document.getElementById('wo-filter-urgency') || {}).value || 'All';
+        if (curWoStatus === 'Open' && curWoUrg === 'All') {
+          STATE.workOrders = bundle.workOrders;
+          STATE.workOrdersLoaded = true;
+          STATE._woCacheKey = 'Open|All';
+          STATE._woFreshAt = Date.now();
+          STATE.byId.wo = {};
+          STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
+          refreshWoDropdownInTimeForm();
+          if (STATE.activeTab === 'work-orders') renderWorkOrdersList();
+        }
+      }
+
+      if (bundle.workLogsAndExpenses && STATE._weFreshAt < startedAt) {
+        const weStatus = (document.getElementById('we-filter-status') || {}).value || 'All';
+        const weBilling = (document.getElementById('we-filter-billing') || {}).value || 'All';
+        const weEmp = isAdmin ? ((document.getElementById('we-filter-emp') || {}).value || '') : '';
+        const weProp = (document.getElementById('we-filter-prop') || {}).value || '';
+        if (weStatus === 'All' && weBilling === 'All' && !weEmp && !weProp) {
+          STATE.workLogs = bundle.workLogsAndExpenses.workLogs || [];
+          STATE.expenses = bundle.workLogsAndExpenses.expenses || [];
+          STATE.weLoaded = true;
+          STATE._weCacheKey = 'All|All||';
+          STATE._weFreshAt = Date.now();
+          STATE.byId.log = {};
+          STATE.byId.exp = {};
+          STATE.workLogs.forEach(function (l) { STATE.byId.log[l.Log_ID] = l; });
+          STATE.expenses.forEach(function (ex) { STATE.byId.exp[ex.Expense_ID] = ex; });
+          if (Array.isArray(bundle.paystubs)) STATE.myPaystubs = bundle.paystubs;
+          if (STATE.activeTab === 'time-expenses') {
+            renderTimeAndExpensesTable();
+            if (!isAdmin) renderCrewPaystubs();
+          }
+        }
+      }
+
+      if (bundle.billing && STATE._billingFreshAt < startedAt) {
+        STATE.billingData = bundle.billing;
+        STATE._billingFreshAt = Date.now();
+        STATE.byId.inv = {};
+        (bundle.billing.invoices || []).forEach(function (inv) { STATE.byId.inv[inv.Invoice_ID] = inv; });
+        if (STATE.activeTab === 'billing') {
+          renderUnbilledPipeline();
+          renderInvoicesList();
+          renderPaymentsLedger();
+        }
+      }
+
+      if (bundle.rentRoll && STATE._rentFreshAt < startedAt) {
+        const curRentProp = (document.getElementById('rent-filter-prop') || {}).value || '';
+        const curRentCycle = (document.getElementById('rent-cycle-type') || {}).value || 'Academic';
+        const curRentLabel = (document.getElementById('rent-cycle-label') || {}).value || '26-27';
+        if (!curRentProp && curRentCycle === rentCycleType && curRentLabel === rentCycleLabel) {
+          STATE.rentData = bundle.rentRoll;
+          STATE._rentCacheKey = [rentCycleType, rentCycleLabel, ''].join('|');
+          STATE._rentFreshAt = Date.now();
+          STATE.byId.lease = {};
+          STATE.byId.tenant = {};
+          (bundle.rentRoll.leases || []).forEach(function (l) {
+            STATE.byId.lease[l.Lease_ID] = l;
+            (l.tenants || []).forEach(function (t) { STATE.byId.tenant[t.Tenant_ID] = t; });
+          });
+          if (STATE.activeTab === 'rentals') renderRentRoll(bundle.rentRoll);
+        }
+      }
+
+      if (bundle.payroll && STATE._payrollFreshAt < startedAt) {
+        const curPrStart = (document.getElementById('payroll-start-date') || {}).value || '';
+        const curPrEnd = (document.getElementById('payroll-end-date') || {}).value || '';
+        if (curPrStart === payrollStartDate && curPrEnd === payrollEndDate) {
+          STATE.payrollData = bundle.payroll;
+          STATE._payrollCacheKey = payrollStartDate + '|' + payrollEndDate;
+          STATE._payrollFreshAt = Date.now();
+          STATE.byId.worker = {};
+          (bundle.payroll.workers || []).forEach(function (w) { STATE.byId.worker[w.employeeId] = w; });
+          if (STATE.activeTab === 'payroll') renderPayrollView(bundle.payroll);
+        }
+      }
+    } catch (err) {
+      // Background prefetch failure is non-fatal; tabs fall back to on-demand load
+    }
+  }
+
   function handleSessionInvalid() {
+    resetClientViewCaches();
     STATE.token = '';
     STATE.user = null;
     localStorage.removeItem(STORAGE_TOKEN_KEY);
@@ -270,6 +440,7 @@
   }
 
   function onAuthenticated(res) {
+    resetClientViewCaches();
     STATE.token = res.token || '';
     if (STATE.token) localStorage.setItem(STORAGE_TOKEN_KEY, STATE.token);
     STATE.user = res.user;
@@ -286,6 +457,21 @@
     indexMasterData();
     buildNavigationTabs();
     populateWorkEntryFormOptions();
+
+    if (res.initialOverview) {
+      STATE.adminOverview = res.initialOverview;
+      STATE._overviewFreshAt = Date.now();
+    }
+    if (Array.isArray(res.initialWorkOrders)) {
+      STATE.workOrders = res.initialWorkOrders;
+      STATE.workOrdersLoaded = true;
+      STATE._woCacheKey = 'Open|All';
+      STATE._woFreshAt = Date.now();
+      STATE.byId.wo = {};
+      STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
+      refreshWoDropdownInTimeForm();
+    }
+
     showShell('app-shell');
 
     if (res.needsPinSetup) {
@@ -296,6 +482,7 @@
 
     const defaultTab = isAdmin ? 'dashboard' : 'work-orders';
     switchTab(defaultTab);
+    scheduleWorkspacePrefetch(150);
   }
 
   function indexMasterData() {
@@ -447,13 +634,19 @@
   // DASHBOARD ("NOTHING MISSED")
   // =========================================================================
 
-  async function loadAdminDashboard() {
+  async function loadAdminDashboard(opts) {
+    const force = Boolean(opts && opts.force === true);
+    if (STATE.adminOverview) {
+      renderDashboard(STATE.adminOverview);
+      if (!force && (Date.now() - STATE._overviewFreshAt < FRESH_WINDOW_MS)) return;
+    }
     try {
       const data = await apiCall('getAdminOverview', STATE.token);
       STATE.adminOverview = data;
-      renderDashboard(data);
+      STATE._overviewFreshAt = Date.now();
+      if (STATE.activeTab === 'dashboard') renderDashboard(data);
     } catch (err) {
-      showToast('Failed to load dashboard: ' + err.message, 'error');
+      if (!STATE.adminOverview) showToast('Failed to load dashboard: ' + err.message, 'error');
     }
   }
 
@@ -535,21 +728,35 @@
   // WORK ORDERS & DISPATCH
   // =========================================================================
 
-  async function loadWorkOrders() {
+  async function loadWorkOrders(opts) {
     const isAdmin = STATE.user && (STATE.user.role === 'Owner' || STATE.user.role === 'Admin');
     document.getElementById('wo-new-btn').classList.toggle('hidden', !isAdmin);
-    try {
-      const rows = await apiCall('getWorkOrders', STATE.token, {
-        status: document.getElementById('wo-filter-status').value,
-        urgency: document.getElementById('wo-filter-urgency').value
-      });
-      STATE.workOrders = rows || [];
-      STATE.byId.wo = {};
-      STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
+    const status = document.getElementById('wo-filter-status').value;
+    const urgency = document.getElementById('wo-filter-urgency').value;
+    const cacheKey = status + '|' + urgency;
+    const force = Boolean(opts && opts.force === true);
+    const cacheHit = STATE.workOrdersLoaded && STATE._woCacheKey === cacheKey;
+
+    if (cacheHit) {
       renderWorkOrdersList();
       refreshWoDropdownInTimeForm();
+      if (!force && (Date.now() - STATE._woFreshAt < FRESH_WINDOW_MS)) return;
+    }
+    try {
+      const rows = await apiCall('getWorkOrders', STATE.token, {
+        status: status,
+        urgency: urgency
+      });
+      STATE.workOrders = rows || [];
+      STATE.workOrdersLoaded = true;
+      STATE._woCacheKey = cacheKey;
+      STATE._woFreshAt = Date.now();
+      STATE.byId.wo = {};
+      STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
+      if (STATE.activeTab === 'work-orders') renderWorkOrdersList();
+      refreshWoDropdownInTimeForm();
     } catch (err) {
-      showToast(err.message, 'error');
+      if (!cacheHit) showToast(err.message, 'error');
     }
   }
 
@@ -659,7 +866,8 @@
       try {
         await apiCall('saveWorkOrder', STATE.token, payload);
         closeModal();
-        await loadWorkOrders();
+        onDataMutated();
+        await loadWorkOrders({ force: true });
         showToast('Work order saved.', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -865,6 +1073,7 @@
       if (res && res.property) {
         registerNewPropertyClientSide(res.property);
         selectWorkEntryProperty(res.property.Property_ID, res.property.Property_Name);
+        invalidateClientDataCache();
         showToast((res.created ? 'Created property: ' : 'Selected existing property: ') + res.property.Property_Name, 'success');
       }
     } catch (err) {
@@ -1026,7 +1235,8 @@
       document.getElementById('we-materials-list').innerHTML = '';
       document.getElementById('we-complete-wo').checked = false;
       showToast('Work / expense entry saved!', 'success');
-      await loadTimeAndExpenses();
+      onDataMutated();
+      await loadTimeAndExpenses({ force: true });
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -1034,35 +1244,64 @@
     }
   }
 
-  async function loadTimeAndExpenses() {
+  async function loadTimeAndExpenses(opts) {
+    const isAdmin = STATE.user && (STATE.user.role === 'Owner' || STATE.user.role === 'Admin');
+    const payrollStatus = document.getElementById('we-filter-status').value;
+    const billingStatus = document.getElementById('we-filter-billing').value;
+    const empId = isAdmin ? document.getElementById('we-filter-emp').value : '';
+    const propId = document.getElementById('we-filter-prop').value;
+    const cacheKey = [payrollStatus, billingStatus, empId, propId].join('|');
+    const force = Boolean(opts && opts.force === true);
+    const cacheHit = STATE.weLoaded && STATE._weCacheKey === cacheKey;
+
+    if (STATE.workOrdersLoaded) refreshWoDropdownInTimeForm();
+    if (cacheHit) {
+      renderTimeAndExpensesTable();
+      if (!isAdmin) renderCrewPaystubs();
+      if (!force && (Date.now() - STATE._weFreshAt < FRESH_WINDOW_MS)) return;
+    }
+
     try {
-      const isAdmin = STATE.user && (STATE.user.role === 'Owner' || STATE.user.role === 'Admin');
-      if (STATE.workOrders.length === 0) {
-        const wos = await apiCall('getWorkOrders', STATE.token, { status: 'Open' });
-        STATE.workOrders = wos || [];
+      const needWos = !STATE.workOrdersLoaded;
+      const tasks = [
+        apiCall('getWorkLogsAndExpenses', STATE.token, {
+          payrollStatus: payrollStatus,
+          billingStatus: billingStatus,
+          employeeId: empId,
+          propertyId: propId
+        }),
+        needWos ? apiCall('getWorkOrders', STATE.token, { status: 'Open', urgency: 'All' }) : Promise.resolve(null),
+        !isAdmin ? apiCall('getMyPortalData', STATE.token) : Promise.resolve(null)
+      ];
+      const results = await Promise.all(tasks);
+      const res = results[0];
+      if (needWos && results[1]) {
+        STATE.workOrders = results[1] || [];
+        STATE.workOrdersLoaded = true;
+        STATE._woCacheKey = 'Open|All';
+        STATE._woFreshAt = Date.now();
+        STATE.byId.wo = {};
+        STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
         refreshWoDropdownInTimeForm();
       }
-      const res = await apiCall('getWorkLogsAndExpenses', STATE.token, {
-        payrollStatus: document.getElementById('we-filter-status').value,
-        billingStatus: document.getElementById('we-filter-billing').value,
-        employeeId: isAdmin ? document.getElementById('we-filter-emp').value : '',
-        propertyId: document.getElementById('we-filter-prop').value
-      });
-      STATE.workLogs = res.workLogs || [];
-      STATE.expenses = res.expenses || [];
+
+      STATE.workLogs = (res && res.workLogs) || [];
+      STATE.expenses = (res && res.expenses) || [];
+      STATE.weLoaded = true;
+      STATE._weCacheKey = cacheKey;
+      STATE._weFreshAt = Date.now();
       STATE.byId.log = {};
       STATE.byId.exp = {};
       STATE.workLogs.forEach(function (l) { STATE.byId.log[l.Log_ID] = l; });
       STATE.expenses.forEach(function (ex) { STATE.byId.exp[ex.Expense_ID] = ex; });
-      renderTimeAndExpensesTable();
+      if (STATE.activeTab === 'time-expenses') renderTimeAndExpensesTable();
 
-      if (!isAdmin) {
-        const my = await apiCall('getMyPortalData', STATE.token);
-        STATE.myPaystubs = my.paystubs || [];
-        renderCrewPaystubs();
+      if (!isAdmin && results[2]) {
+        STATE.myPaystubs = results[2].paystubs || [];
+        if (STATE.activeTab === 'time-expenses') renderCrewPaystubs();
       }
     } catch (err) {
-      showToast(err.message, 'error');
+      if (!cacheHit) showToast(err.message, 'error');
     }
   }
 
@@ -1153,7 +1392,8 @@
     try {
       await apiCall('batchApproveItems', STATE.token, { logIds: logIds, expenseIds: expIds, status: 'Approved' });
       showToast('Approved selected entries!', 'success');
-      await loadTimeAndExpenses();
+      onDataMutated();
+      await loadTimeAndExpenses({ force: true });
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -1205,7 +1445,8 @@
         try {
           await apiCall('updateWorkLogEntry', STATE.token, payload);
           closeModal();
-          await loadTimeAndExpenses();
+          onDataMutated();
+          await loadTimeAndExpenses({ force: true });
           showToast('Work log updated.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
@@ -1255,7 +1496,8 @@
         try {
           await apiCall('updateMaterialExpense', STATE.token, payload);
           closeModal();
-          await loadTimeAndExpenses();
+          onDataMutated();
+          await loadTimeAndExpenses({ force: true });
           showToast('Receipt updated.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
@@ -1283,17 +1525,27 @@
     });
   }
 
-  async function loadBillingView() {
-    try {
-      const data = await apiCall('getBillingDashboard', STATE.token);
-      STATE.billingData = data;
-      STATE.byId.inv = {};
-      (data.invoices || []).forEach(function (inv) { STATE.byId.inv[inv.Invoice_ID] = inv; });
+  async function loadBillingView(opts) {
+    const force = Boolean(opts && opts.force === true);
+    if (STATE.billingData) {
       renderUnbilledPipeline();
       renderInvoicesList();
       renderPaymentsLedger();
+      if (!force && (Date.now() - STATE._billingFreshAt < FRESH_WINDOW_MS)) return;
+    }
+    try {
+      const data = await apiCall('getBillingDashboard', STATE.token);
+      STATE.billingData = data;
+      STATE._billingFreshAt = Date.now();
+      STATE.byId.inv = {};
+      (data.invoices || []).forEach(function (inv) { STATE.byId.inv[inv.Invoice_ID] = inv; });
+      if (STATE.activeTab === 'billing') {
+        renderUnbilledPipeline();
+        renderInvoicesList();
+        renderPaymentsLedger();
+      }
     } catch (err) {
-      showToast(err.message, 'error');
+      if (!STATE.billingData) showToast(err.message, 'error');
     }
   }
 
@@ -1412,7 +1664,8 @@
         const res = await apiCall('createInvoice', STATE.token, payload);
         closeModal();
         switchBillingSubtab('invoices');
-        await loadBillingView();
+        onDataMutated();
+        await loadBillingView({ force: true });
         openPreviewModal({
           title: res.invoice.Invoice_Number + ' — ' + res.invoice.Doc_Type,
           html: res.html,
@@ -1558,7 +1811,8 @@
           messageBody: fd.get('messageBody')
         });
         closeModal();
-        await loadBillingView();
+        onDataMutated();
+        await loadBillingView({ force: true });
         showToast('Invoice emailed to ' + fd.get('toEmail'), 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -1642,7 +1896,8 @@
           notes: fd.get('notes')
         });
         closeModal();
-        await loadBillingView();
+        onDataMutated();
+        await loadBillingView({ force: true });
         showToast('Payment applied successfully!', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -1657,7 +1912,7 @@
   // RENTALS, LEASES & ACADEMIC/CALENDAR RENT ROLL
   // =========================================================================
 
-  async function loadRentalsView() {
+  async function loadRentalsView(opts) {
     const b = STATE.boot || {};
     const propSel = document.getElementById('rent-filter-prop');
     if (propSel && propSel.options.length === 0) {
@@ -1665,22 +1920,35 @@
         return '<option value="' + esc(p.Property_ID) + '">' + esc(p.Property_Name) + '</option>';
       }).join('');
     }
+    const cycleType = document.getElementById('rent-cycle-type').value;
+    const cycleLabel = document.getElementById('rent-cycle-label').value;
+    const propVal = propSel ? propSel.value : '';
+    const cacheKey = [cycleType, cycleLabel, propVal].join('|');
+    const force = Boolean(opts && opts.force === true);
+    const cacheHit = Boolean(STATE.rentData && STATE._rentCacheKey === cacheKey);
+
+    if (cacheHit) {
+      renderRentRoll(STATE.rentData);
+      if (!force && (Date.now() - STATE._rentFreshAt < FRESH_WINDOW_MS)) return;
+    }
     try {
       const data = await apiCall('getRentRollData', STATE.token, {
-        cycleType: document.getElementById('rent-cycle-type').value,
-        cycleLabel: document.getElementById('rent-cycle-label').value,
-        propertyId: propSel ? propSel.value : ''
+        cycleType: cycleType,
+        cycleLabel: cycleLabel,
+        propertyId: propVal
       });
       STATE.rentData = data;
+      STATE._rentCacheKey = cacheKey;
+      STATE._rentFreshAt = Date.now();
       STATE.byId.lease = {};
       STATE.byId.tenant = {};
       (data.leases || []).forEach(function (l) {
         STATE.byId.lease[l.Lease_ID] = l;
         (l.tenants || []).forEach(function (t) { STATE.byId.tenant[t.Tenant_ID] = t; });
       });
-      renderRentRoll(data);
+      if (STATE.activeTab === 'rentals') renderRentRoll(data);
     } catch (err) {
-      showToast(err.message, 'error');
+      if (!cacheHit) showToast(err.message, 'error');
     }
   }
 
@@ -1854,7 +2122,8 @@
           });
         }
         closeModal();
-        await loadRentalsView();
+        onDataMutated();
+        await loadRentalsView({ force: true });
         showToast('Lease saved.', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -1910,7 +2179,8 @@
           overridesJson: t.Lease_Override_Months_JSON || '{}'
         });
         closeModal();
-        await loadRentalsView();
+        onDataMutated();
+        await loadRentalsView({ force: true });
         showToast('Tenant saved.', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -1984,7 +2254,8 @@
           referenceNote: fd.get('referenceNote')
         });
         closeModal();
-        await loadRentalsView();
+        onDataMutated();
+        await loadRentalsView({ force: true });
         showToast('Ledger entry recorded!', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -2022,19 +2293,22 @@
     document.getElementById('cell-act-late').onclick = async function () {
       await apiCall('recordRentLedgerEntry', STATE.token, { tenantId: tenantId, entryType: 'Late Fee', amount: 50, periodMonth: monthKey, paymentMethod: 'System' });
       closeModal();
-      await loadRentalsView();
+      onDataMutated();
+      await loadRentalsView({ force: true });
       showToast('Late fee applied.', 'success');
     };
     document.getElementById('cell-act-waive').onclick = async function () {
       await apiCall('setTenantMonthOverride', STATE.token, { tenantId: tenantId, monthKey: monthKey, overrideAmount: 0 });
       closeModal();
-      await loadRentalsView();
+      onDataMutated();
+      await loadRentalsView({ force: true });
       showToast('Month waived ($0).', 'success');
     };
     document.getElementById('cell-act-clear').onclick = async function () {
       await apiCall('setTenantMonthOverride', STATE.token, { tenantId: tenantId, monthKey: monthKey, clearOverride: true });
       closeModal();
-      await loadRentalsView();
+      onDataMutated();
+      await loadRentalsView({ force: true });
       showToast('Override cleared.', 'success');
     };
     document.getElementById('cell-act-custom').onclick = async function () {
@@ -2042,7 +2316,8 @@
       if (val === '') return;
       await apiCall('setTenantMonthOverride', STATE.token, { tenantId: tenantId, monthKey: monthKey, overrideAmount: val });
       closeModal();
-      await loadRentalsView();
+      onDataMutated();
+      await loadRentalsView({ force: true });
       showToast('Custom month rent updated.', 'success');
     };
     openModal('modal-cell-action');
@@ -2086,7 +2361,8 @@
           recordRefundLedger: form.querySelector('[name="recordRefundLedger"]').checked
         });
         closeModal();
-        await loadRentalsView();
+        onDataMutated();
+        await loadRentalsView({ force: true });
         openPreviewModal({
           title: 'Security Deposit Settlement — ' + t.Name,
           html: res.html,
@@ -2106,18 +2382,30 @@
   // PAYROLL & REIMBURSEMENTS
   // =========================================================================
 
-  async function loadPayrollView() {
+  async function loadPayrollView(opts) {
+    const startDate = document.getElementById('payroll-start-date').value;
+    const endDate = document.getElementById('payroll-end-date').value;
+    const cacheKey = startDate + '|' + endDate;
+    const force = Boolean(opts && opts.force === true);
+    const cacheHit = Boolean(STATE.payrollData && STATE._payrollCacheKey === cacheKey);
+
+    if (cacheHit) {
+      renderPayrollView(STATE.payrollData);
+      if (!force && (Date.now() - STATE._payrollFreshAt < FRESH_WINDOW_MS)) return;
+    }
     try {
       const data = await apiCall('getPayrollSummary', STATE.token, {
-        startDate: document.getElementById('payroll-start-date').value,
-        endDate: document.getElementById('payroll-end-date').value
+        startDate: startDate,
+        endDate: endDate
       });
       STATE.payrollData = data;
+      STATE._payrollCacheKey = cacheKey;
+      STATE._payrollFreshAt = Date.now();
       STATE.byId.worker = {};
       (data.workers || []).forEach(function (w) { STATE.byId.worker[w.employeeId] = w; });
-      renderPayrollView(data);
+      if (STATE.activeTab === 'payroll') renderPayrollView(data);
     } catch (err) {
-      showToast(err.message, 'error');
+      if (!cacheHit) showToast(err.message, 'error');
     }
   }
 
@@ -2212,7 +2500,8 @@
           referenceNumber: fd.get('referenceNumber')
         });
         closeModal();
-        await loadPayrollView();
+        onDataMutated();
+        await loadPayrollView({ force: true });
         openPreviewModal({
           title: 'Paystub ' + res.payroll.Payroll_ID + ' — ' + w.name,
           html: res.html,
@@ -2275,6 +2564,7 @@
       try {
         const updated = await apiCall('saveSettings', STATE.token, patch);
         STATE.boot.settings = updated;
+        onDataMutated();
         showToast('Company & billing settings saved.', 'success');
       } catch (err) {
         showToast(err.message, 'error');
@@ -2502,12 +2792,17 @@
 
   async function refreshBootstrapAndSettings() {
     closeModal();
+    onDataMutated();
     const res = await apiCall('bootstrapApp', STATE.token);
     if (res && res.authenticated) {
       STATE.boot = res.bootstrapData;
       indexMasterData();
       populateWorkEntryFormOptions();
       renderSettingsView();
+      if (res.initialOverview) {
+        STATE.adminOverview = res.initialOverview;
+        STATE._overviewFreshAt = Date.now();
+      }
       showToast('Saved!', 'success');
     }
   }
@@ -2752,11 +3047,46 @@
         document.getElementById('auth-set-pin-panel').classList.add('hidden');
         showShell('app-shell');
         switchTab(STATE.user.role === 'Owner' || STATE.user.role === 'Admin' ? 'dashboard' : 'work-orders');
+        scheduleWorkspacePrefetch(150);
         showToast('Quick PIN saved!', 'success');
       } else if (action === 'skip-first-pin') {
         document.getElementById('auth-set-pin-panel').classList.add('hidden');
         showShell('app-shell');
         switchTab(STATE.user.role === 'Owner' || STATE.user.role === 'Admin' ? 'dashboard' : 'work-orders');
+        scheduleWorkspacePrefetch(150);
+      } else if (action === 'force-sync') {
+        const icon = document.getElementById('sync-icon');
+        if (icon) icon.classList.add('fa-spin');
+        try {
+          const res = await apiCall('refreshWorkspaceCache', STATE.token);
+          if (res && res.ok) {
+            resetClientViewCaches();
+            STATE.boot = res.bootstrapData;
+            indexMasterData();
+            populateWorkEntryFormOptions();
+            if (res.initialOverview) {
+              STATE.adminOverview = res.initialOverview;
+              STATE._overviewFreshAt = Date.now();
+            }
+            if (Array.isArray(res.initialWorkOrders)) {
+              STATE.workOrders = res.initialWorkOrders;
+              STATE.workOrdersLoaded = true;
+              STATE._woCacheKey = 'Open|All';
+              STATE._woFreshAt = Date.now();
+              STATE.byId.wo = {};
+              STATE.workOrders.forEach(function (w) { STATE.byId.wo[w.WO_ID] = w; });
+              refreshWoDropdownInTimeForm();
+            }
+            const isAdmin = STATE.user && (STATE.user.role === 'Owner' || STATE.user.role === 'Admin');
+            switchTab(STATE.activeTab || (isAdmin ? 'dashboard' : 'work-orders'));
+            scheduleWorkspacePrefetch(150);
+            showToast('Synced latest data from Google Sheets!', 'success');
+          }
+        } catch (err) {
+          showToast('Sync failed: ' + err.message, 'error');
+        } finally {
+          if (icon) icon.classList.remove('fa-spin');
+        }
       } else if (action === 'logout') {
         await apiCall('logoutSession', STATE.token);
         handleSessionInvalid();
@@ -2847,7 +3177,8 @@
         setLoading(true, 'Sending reminder...');
         try {
           await apiCall('sendInvoiceReminder', STATE.token, { invoiceId: btn.getAttribute('data-id') });
-          await loadBillingView();
+          onDataMutated();
+          await loadBillingView({ force: true });
           showToast('Payment reminder emailed.', 'success');
         } catch (err) { showToast(err.message, 'error'); } finally { setLoading(false); }
       } else if (action === 'pay-invoice') {
@@ -2859,7 +3190,8 @@
         setLoading(true, 'Voiding invoice...');
         try {
           await apiCall('voidInvoice', STATE.token, btn.getAttribute('data-id'), 'Voided in BPM');
-          await loadBillingView();
+          onDataMutated();
+          await loadBillingView({ force: true });
           showToast('Invoice voided; items returned to Unbilled.', 'success');
         } catch (err) { showToast(err.message, 'error'); } finally { setLoading(false); }
       } else if (action === 'open-lease-modal') {
@@ -2879,7 +3211,7 @@
       } else if (action === 'open-deposit-settlement') {
         openDepositSettlementModal(btn.getAttribute('data-id'));
       } else if (action === 'refresh-payroll') {
-        loadPayrollView();
+        loadPayrollView({ force: true });
       } else if (action === 'open-run-payroll') {
         openRunPayrollModal(btn.getAttribute('data-id'));
       } else if (action === 'settings-subtab') {
@@ -3027,7 +3359,8 @@
     },
     bootstrapApp: function () {
       const emp = MOCK_DB.employees.find(function (e) { return e.Employee_ID === MOCK_DB.currentEmpId; }) || MOCK_DB.employees[0];
-      return {
+      const isAdmin = emp.Role === 'Owner' || emp.Role === 'Admin';
+      const out = {
         authenticated: true,
         token: 'mock-token-' + emp.Employee_ID,
         user: { employeeId: emp.Employee_ID, name: emp.Name, email: emp.Email, role: emp.Role, payType: emp.Pay_Type, hasPin: true },
@@ -3043,6 +3376,38 @@
           openWorkOrdersCount: MOCK_DB.workOrders.filter(function (w) { return w.Status !== 'Completed' && w.Status !== 'Billed'; }).length
         }
       };
+      if (isAdmin) {
+        out.initialOverview = MOCK_API.getAdminOverview();
+      } else {
+        out.initialWorkOrders = MOCK_API.getWorkOrders('mock', { status: 'Open', urgency: 'All' });
+      }
+      return out;
+    },
+    prefetchWorkspaceBundle: function (t, opts) {
+      const emp = MOCK_DB.employees.find(function (e) { return e.Employee_ID === MOCK_DB.currentEmpId; }) || MOCK_DB.employees[0];
+      const isAdmin = emp.Role === 'Owner' || emp.Role === 'Admin';
+      const o = opts || {};
+      if (isAdmin) {
+        return {
+          roleScope: 'admin',
+          workOrders: MOCK_API.getWorkOrders(t, { status: o.woStatus || 'Open', urgency: o.woUrgency || 'All' }),
+          workLogsAndExpenses: MOCK_API.getWorkLogsAndExpenses(),
+          billing: MOCK_API.getBillingDashboard(),
+          rentRoll: MOCK_API.getRentRollData(t, { cycleType: o.rentCycleType || 'Academic', cycleLabel: o.rentCycleLabel || '26-27' }),
+          payroll: MOCK_API.getPayrollSummary()
+        };
+      }
+      const workData = MOCK_API.getWorkLogsAndExpenses();
+      return {
+        roleScope: 'crew',
+        workOrders: MOCK_API.getWorkOrders(t, { status: o.woStatus || 'Open', urgency: o.woUrgency || 'All' }),
+        workLogsAndExpenses: workData,
+        paystubs: MOCK_DB.payrollHistory
+      };
+    },
+    refreshWorkspaceCache: function () {
+      const boot = MOCK_API.bootstrapApp();
+      return Object.assign({ ok: true }, boot);
     },
     loginWithPin: function (identifier) {
       const clean = String(identifier || '').trim().toLowerCase();

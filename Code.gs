@@ -202,12 +202,22 @@ function installAutomationTriggersFromMenu() {
 }
 
 // ============================================================================
-// CORE HELPERS: LOCKING, WIRE SANITIZATION, DATES, HASHING & TABLE STORAGE
+// CORE HELPERS: LOCKING, MEMOIZATION, CACHE, DATES & TABLE STORAGE
 // ============================================================================
 
+var _MEMO_SS = null;
+var _MEMO_TZ = '';
+var _TABLE_MEMO = {};
+var TABLE_CACHE_PREFIX = 'BPM_TBL_V1_';
+var TABLE_CACHE_TTL_SECONDS = 45;
+
 function getSS() {
+  if (_MEMO_SS) return _MEMO_SS;
   const active = SpreadsheetApp.getActiveSpreadsheet();
-  if (active) return active;
+  if (active) {
+    _MEMO_SS = active;
+    return _MEMO_SS;
+  }
   let id = BPM_DEFAULT_SPREADSHEET_ID;
   try {
     if (typeof PropertiesService !== 'undefined') {
@@ -217,7 +227,44 @@ function getSS() {
   } catch (err) {
     // Fallback to default constant
   }
-  return SpreadsheetApp.openById(id);
+  _MEMO_SS = SpreadsheetApp.openById(id);
+  return _MEMO_SS;
+}
+
+function invalidateTableCache(sheetName) {
+  if (!sheetName) return;
+  delete _TABLE_MEMO[sheetName];
+  try {
+    if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+      CacheService.getScriptCache().remove(TABLE_CACHE_PREFIX + sheetName);
+    }
+  } catch (err) {
+    // Non-fatal
+  }
+}
+
+function clearAllTableCaches() {
+  _TABLE_MEMO = {};
+  _MEMO_TZ = '';
+  try {
+    if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+      const cache = CacheService.getScriptCache();
+      const names = Object.keys(SCHEMA).concat([
+        'archive_fact_Work_Logs',
+        'archive_fact_Material_Expenses',
+        'archive_fact_Work_Orders'
+      ]);
+      if (typeof cache.removeAll === 'function') {
+        cache.removeAll(names.map(function (n) { return TABLE_CACHE_PREFIX + n; }));
+      } else {
+        for (let i = 0; i < names.length; i++) {
+          cache.remove(TABLE_CACHE_PREFIX + names[i]);
+        }
+      }
+    }
+  } catch (err) {
+    // Non-fatal
+  }
 }
 
 function withScriptLock(fn) {
@@ -265,11 +312,13 @@ function nowIso() {
 }
 
 function getTz() {
+  if (_MEMO_TZ) return _MEMO_TZ;
   try {
-    return getSS().getSpreadsheetTimeZone() || 'America/New_York';
+    _MEMO_TZ = getSS().getSpreadsheetTimeZone() || 'America/New_York';
   } catch (err) {
-    return 'America/New_York';
+    _MEMO_TZ = 'America/New_York';
   }
+  return _MEMO_TZ;
 }
 
 function todayYmd() {
@@ -408,6 +457,7 @@ function ensureSheetSchema(ss, sheetName, expectedHeaders) {
  */
 function setupDatabase() {
   return withScriptLock(function () {
+    clearAllTableCaches();
     const ss = getSS();
     const names = Object.keys(SCHEMA);
     for (let i = 0; i < names.length; i++) {
@@ -456,11 +506,36 @@ function setupDatabase() {
         }]);
       }
     }
+    clearAllTableCaches();
     return { ok: true, sheetsVerified: names.length };
   });
 }
 
-function getTableData(sheetName) {
+function getTableData(sheetName, needSheet) {
+  if (!needSheet) {
+    if (_TABLE_MEMO[sheetName]) return _TABLE_MEMO[sheetName];
+    try {
+      if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+        const cachedRaw = CacheService.getScriptCache().get(TABLE_CACHE_PREFIX + sheetName);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (parsed && Array.isArray(parsed.rows)) {
+            const cachedTable = {
+              sheet: null,
+              headers: parsed.headers || [],
+              colMap: parsed.colMap || {},
+              rows: parsed.rows
+            };
+            _TABLE_MEMO[sheetName] = cachedTable;
+            return cachedTable;
+          }
+        }
+      }
+    } catch (err) {
+      // Cache read miss or corrupt JSON: fall through to SpreadsheetApp read
+    }
+  }
+
   const ss = getSS();
   const expected = SCHEMA[sheetName];
   let sheet = ss.getSheetByName(sheetName);
@@ -470,7 +545,9 @@ function getTableData(sheetName) {
   const lastRow = sheet.getLastRow();
   const lastCol = Math.max(sheet.getLastColumn(), expected ? expected.length : 1);
   if (lastRow === 0) {
-    return { sheet: sheet, headers: expected || [], colMap: {}, rows: [] };
+    const emptyTbl = { sheet: sheet, headers: expected || [], colMap: {}, rows: [] };
+    if (!needSheet) _TABLE_MEMO[sheetName] = { sheet: null, headers: emptyTbl.headers, colMap: {}, rows: [] };
+    return emptyTbl;
   }
   const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
   const headers = values[0].map(function (h) {
@@ -505,7 +582,22 @@ function getTableData(sheetName) {
     }
     rows.push(obj);
   }
-  return { sheet: sheet, headers: headers, colMap: colMap, rows: rows };
+  const result = { sheet: sheet, headers: headers, colMap: colMap, rows: rows };
+  if (!needSheet) {
+    const memoTbl = { sheet: null, headers: headers, colMap: colMap, rows: rows };
+    _TABLE_MEMO[sheetName] = memoTbl;
+    try {
+      if (typeof CacheService !== 'undefined' && CacheService.getScriptCache) {
+        const rawJson = JSON.stringify({ headers: headers, colMap: colMap, rows: rows });
+        if (rawJson.length < 90000) {
+          CacheService.getScriptCache().put(TABLE_CACHE_PREFIX + sheetName, rawJson, TABLE_CACHE_TTL_SECONDS);
+        }
+      }
+    } catch (err) {
+      // Cache write failure is non-fatal
+    }
+  }
+  return result;
 }
 
 function mapObjectToRow(headers, obj) {
@@ -529,11 +621,12 @@ function appendRecords(sheetName, records) {
   });
   const startRow = sheet.getLastRow() + 1;
   sheet.getRange(startRow, 1, rows2d.length, headers.length).setValues(rows2d);
+  invalidateTableCache(sheetName);
   return records;
 }
 
 function updateRowById(sheetName, idHeader, idVal, patchObj) {
-  const tbl = getTableData(sheetName);
+  const tbl = getTableData(sheetName, true);
   const target = String(idVal);
   for (let i = 0; i < tbl.rows.length; i++) {
     const row = tbl.rows[i];
@@ -543,6 +636,7 @@ function updateRowById(sheetName, idHeader, idVal, patchObj) {
       });
       const rowArr = mapObjectToRow(tbl.headers, row);
       tbl.sheet.getRange(row._rowIndex, 1, 1, tbl.headers.length).setValues([rowArr]);
+      invalidateTableCache(sheetName);
       return row;
     }
   }
@@ -552,8 +646,8 @@ function updateRowById(sheetName, idHeader, idVal, patchObj) {
 function batchPatchRowsById(sheetName, idHeader, patchesById) {
   const ids = Object.keys(patchesById || {});
   if (ids.length === 0) return 0;
-  const tbl = getTableData(sheetName);
-  let count = 0;
+  const tbl = getTableData(sheetName, true);
+  const updatedRows = [];
   for (let i = 0; i < tbl.rows.length; i++) {
     const row = tbl.rows[i];
     const id = String(row[idHeader]);
@@ -562,22 +656,44 @@ function batchPatchRowsById(sheetName, idHeader, patchesById) {
       Object.keys(patch).forEach(function (k) {
         row[k] = patch[k];
       });
-      const rowArr = mapObjectToRow(tbl.headers, row);
-      tbl.sheet.getRange(row._rowIndex, 1, 1, tbl.headers.length).setValues([rowArr]);
-      count++;
+      updatedRows.push(row);
     }
+  }
+  const count = updatedRows.length;
+  if (count > 0) {
+    if (
+      count > 1 &&
+      tbl.rows.length > 0 &&
+      tbl.rows[0]._rowIndex === 2 &&
+      tbl.rows[tbl.rows.length - 1]._rowIndex === tbl.rows.length + 1
+    ) {
+      const allRows2d = tbl.rows.map(function (r) {
+        return mapObjectToRow(tbl.headers, r);
+      });
+      tbl.sheet.getRange(2, 1, allRows2d.length, tbl.headers.length).setValues(allRows2d);
+    } else {
+      for (let j = 0; j < updatedRows.length; j++) {
+        const uRow = updatedRows[j];
+        const rowArr = mapObjectToRow(tbl.headers, uRow);
+        tbl.sheet.getRange(uRow._rowIndex, 1, 1, tbl.headers.length).setValues([rowArr]);
+      }
+    }
+    invalidateTableCache(sheetName);
   }
   return count;
 }
 
 function deleteRowsWhere(sheetName, predicate) {
-  const tbl = getTableData(sheetName);
+  const tbl = getTableData(sheetName, true);
   const toDelete = [];
   for (let i = 0; i < tbl.rows.length; i++) {
     if (predicate(tbl.rows[i])) toDelete.push(tbl.rows[i]._rowIndex);
   }
   for (let j = toDelete.length - 1; j >= 0; j--) {
     tbl.sheet.deleteRow(toDelete[j]);
+  }
+  if (toDelete.length > 0) {
+    invalidateTableCache(sheetName);
   }
   return toDelete.length;
 }
@@ -815,6 +931,78 @@ function requireAuth(token, allowedRoles) {
   return user;
 }
 
+function buildInitialViewPayload(user, needsPinSetup) {
+  if (needsPinSetup) return {};
+  if (isAdminRole(user.role)) {
+    return { initialOverview: getAdminOverviewInternal() };
+  }
+  return {
+    initialWorkOrders: getWorkOrdersInternal(user, { status: 'Open', urgency: 'All' })
+  };
+}
+
+function prefetchWorkspaceBundle(token, options) {
+  const user = requireAuth(token);
+  const opts = options || {};
+  if (isAdminRole(user.role)) {
+    const settings = getSettingsMap();
+    return sanitizeForWire({
+      roleScope: 'admin',
+      workOrders: getWorkOrdersInternal(user, {
+        status: opts.woStatus || 'Open',
+        urgency: opts.woUrgency || 'All'
+      }),
+      workLogsAndExpenses: getWorkLogsAndExpensesInternal(user, {
+        payrollStatus: 'All',
+        billingStatus: 'All',
+        employeeId: '',
+        propertyId: ''
+      }),
+      billing: getBillingDashboardInternal(),
+      rentRoll: getRentRollDataInternal({
+        cycleType: opts.rentCycleType || 'Academic',
+        cycleLabel: opts.rentCycleLabel || '26-27',
+        propertyId: ''
+      }, settings),
+      payroll: getPayrollSummaryInternal({
+        startDate: opts.payrollStartDate || '',
+        endDate: opts.payrollEndDate || ''
+      })
+    });
+  }
+  const workData = getWorkLogsAndExpensesInternal(user, {
+    payrollStatus: 'All',
+    billingStatus: 'All',
+    employeeId: '',
+    propertyId: ''
+  });
+  const paystubs = getTableData('fact_Payroll_History').rows.filter(function (p) {
+    return String(p.Employee_ID) === user.employeeId;
+  }).reverse();
+  return sanitizeForWire({
+    roleScope: 'crew',
+    workOrders: getWorkOrdersInternal(user, {
+      status: opts.woStatus || 'Open',
+      urgency: opts.woUrgency || 'All'
+    }),
+    workLogsAndExpenses: workData,
+    paystubs: paystubs
+  });
+}
+
+function refreshWorkspaceCache(token) {
+  const user = requireAuth(token);
+  clearAllTableCaches();
+  const payload = Object.assign(
+    {
+      ok: true,
+      bootstrapData: buildAuthenticatedBootstrap(user)
+    },
+    buildInitialViewPayload(user, false)
+  );
+  return sanitizeForWire(payload);
+}
+
 /**
  * Initial app bootstrap. Validates existing session token or active Google user.
  */
@@ -856,12 +1044,12 @@ function bootstrapApp(clientToken) {
       companyPhone: settings.COMPANY_PHONE
     });
   }
-  return sanitizeForWire({
+  return sanitizeForWire(Object.assign({
     authenticated: true,
     token: activeToken,
     user: user,
     bootstrapData: buildAuthenticatedBootstrap(user)
-  });
+  }, buildInitialViewPayload(user, false)));
 }
 
 /**
@@ -916,14 +1104,15 @@ function verifyLoginCode(identifier, code) {
   return withScriptLock(function () {
     const token = issueSessionForEmployee(emp);
     const user = buildPublicUser(emp);
+    const needsPinSetup = !user.hasPin;
     addAuditLog(emp.Email || emp.Phone || emp.Name, 'LOGIN_OTP', 'Session', emp.Employee_ID, 'Signed in with OTP');
-    return sanitizeForWire({
+    return sanitizeForWire(Object.assign({
       ok: true,
       token: token,
       user: user,
-      needsPinSetup: !user.hasPin,
+      needsPinSetup: needsPinSetup,
       bootstrapData: buildAuthenticatedBootstrap(user)
-    });
+    }, buildInitialViewPayload(user, needsPinSetup)));
   });
 }
 
@@ -948,12 +1137,12 @@ function loginWithPin(identifier, pin) {
     const token = issueSessionForEmployee(emp);
     const user = buildPublicUser(emp);
     addAuditLog(emp.Email || emp.Phone || emp.Name, 'LOGIN_PIN', 'Session', emp.Employee_ID, 'Signed in with PIN');
-    return sanitizeForWire({
+    return sanitizeForWire(Object.assign({
       ok: true,
       token: token,
       user: user,
       bootstrapData: buildAuthenticatedBootstrap(user)
-    });
+    }, buildInitialViewPayload(user, false)));
   });
 }
 
@@ -1364,6 +1553,10 @@ function getEffectiveLogBillable(log) {
 
 function getWorkOrders(token, filters) {
   const user = requireAuth(token);
+  return sanitizeForWire(getWorkOrdersInternal(user, filters));
+}
+
+function getWorkOrdersInternal(user, filters) {
   const tbl = getTableData('fact_Work_Orders');
   const f = filters || {};
   let rows = tbl.rows.slice();
@@ -1396,7 +1589,7 @@ function getWorkOrders(token, filters) {
     if (ua !== ub) return ua - ub;
     return String(b.Created_At || '').localeCompare(String(a.Created_At || ''));
   });
-  return sanitizeForWire(rows);
+  return rows;
 }
 
 function saveWorkOrder(token, payload) {
@@ -1915,6 +2108,10 @@ function batchApproveItems(token, payload) {
 
 function getWorkLogsAndExpenses(token, filters) {
   const user = requireAuth(token);
+  return sanitizeForWire(getWorkLogsAndExpensesInternal(user, filters));
+}
+
+function getWorkLogsAndExpensesInternal(user, filters) {
   const f = filters || {};
   const admin = isAdminRole(user.role);
   const logsTbl = getTableData('fact_Work_Logs');
@@ -1955,7 +2152,7 @@ function getWorkLogsAndExpenses(token, filters) {
   });
   expenses.sort(function (a, b) { return String(b.Expense_Date || '').localeCompare(String(a.Expense_Date || '')); });
 
-  return sanitizeForWire({ workLogs: logs, expenses: expenses });
+  return { workLogs: logs, expenses: expenses };
 }
 
 // ============================================================================
@@ -1970,25 +2167,12 @@ function computeInvoiceDisplayStatus(inv, todayStr) {
   return s;
 }
 
-function getAdminOverview(token) {
-  requireAuth(token, ['Owner', 'Admin']);
-  const today = todayYmd();
-  const currentMonth = today.slice(0, 7);
-
-  const settings = getSettingsMap();
-  const owners = getTableData('dim_Owners').rows;
-  const props = getTableData('Properties').rows;
-  const wos = getTableData('fact_Work_Orders').rows;
-  const logs = getTableData('fact_Work_Logs').rows;
-  const exps = getTableData('fact_Material_Expenses').rows;
-  const invoices = getTableData('fact_Invoices').rows;
-
+function computeUnbilledPipeline(settings, owners, props, logs, exps) {
   const ownerById = {};
   owners.forEach(function (o) { ownerById[o.Owner_ID] = o; });
   const propById = {};
   props.forEach(function (p) { propById[p.Property_ID] = p; });
 
-  // Unbilled Work Logs & Materials Pipeline
   const unbilledLogs = logs.filter(function (l) {
     return l.Billing_Status === 'Unbilled' && l.Charge_Target !== 'BPM Internal';
   });
@@ -2060,6 +2244,37 @@ function getAdminOverview(token) {
     delete ob.properties;
     return ob;
   }).sort(function (a, b) { return b.totalUnbilled - a.totalUnbilled; });
+
+  return {
+    unbilledLogs: unbilledLogs,
+    unbilledExps: unbilledExps,
+    unbilledTotal: unbilledTotal,
+    unbilledByOwner: unbilledByOwner
+  };
+}
+
+function getAdminOverview(token) {
+  requireAuth(token, ['Owner', 'Admin']);
+  return sanitizeForWire(getAdminOverviewInternal());
+}
+
+function getAdminOverviewInternal() {
+  const today = todayYmd();
+  const currentMonth = today.slice(0, 7);
+
+  const settings = getSettingsMap();
+  const owners = getTableData('dim_Owners').rows;
+  const props = getTableData('Properties').rows;
+  const wos = getTableData('fact_Work_Orders').rows;
+  const logs = getTableData('fact_Work_Logs').rows;
+  const exps = getTableData('fact_Material_Expenses').rows;
+  const invoices = getTableData('fact_Invoices').rows;
+
+  const pipeline = computeUnbilledPipeline(settings, owners, props, logs, exps);
+  const unbilledLogs = pipeline.unbilledLogs;
+  const unbilledExps = pipeline.unbilledExps;
+  const unbilledTotal = pipeline.unbilledTotal;
+  const unbilledByOwner = pipeline.unbilledByOwner;
 
   // Open Work Orders & Alerts
   const openWos = wos.filter(function (w) {
@@ -2154,7 +2369,7 @@ function getAdminOverview(token) {
     return { month: mk, label: formatMonthLabel(mk), billedRevenue: billed, payrollCost: payroll, rentCollected: rent };
   });
 
-  return sanitizeForWire({
+  return {
     kpis: {
       unbilledTotal: unbilledTotal,
       unbilledLogCount: unbilledLogs.length,
@@ -2173,7 +2388,7 @@ function getAdminOverview(token) {
     unbilledByOwner: unbilledByOwner,
     monthlyTrend: monthlyTrend,
     recentLogs: logs.slice(-10).reverse()
-  });
+  };
 }
 
 function inferActiveAcademicCycle(todayStr) {
@@ -2199,7 +2414,17 @@ function buildRecentMonthKeys(count, endMonthKey) {
 
 function getBillingDashboard(token) {
   requireAuth(token, ['Owner', 'Admin']);
-  const overview = getAdminOverview(token);
+  return sanitizeForWire(getBillingDashboardInternal());
+}
+
+function getBillingDashboardInternal() {
+  const settings = getSettingsMap();
+  const owners = getTableData('dim_Owners').rows;
+  const props = getTableData('Properties').rows;
+  const logs = getTableData('fact_Work_Logs').rows;
+  const exps = getTableData('fact_Material_Expenses').rows;
+  const pipeline = computeUnbilledPipeline(settings, owners, props, logs, exps);
+
   const today = todayYmd();
   const invRows = getTableData('fact_Invoices').rows.map(function (inv) {
     const copy = Object.assign({}, inv);
@@ -2210,11 +2435,11 @@ function getBillingDashboard(token) {
       String(b.Invoice_Number || '').localeCompare(String(a.Invoice_Number || ''));
   });
   const paymentRows = getTableData('fact_Invoice_Payments').rows.slice().reverse();
-  return sanitizeForWire({
-    unbilledByOwner: overview.unbilledByOwner,
+  return {
+    unbilledByOwner: pipeline.unbilledByOwner,
     invoices: invRows,
     payments: paymentRows
-  });
+  };
 }
 
 /**
@@ -3448,6 +3673,10 @@ function generateDepositSettlement(token, payload) {
 
 function getPayrollSummary(token, params) {
   requireAuth(token, ['Owner', 'Admin']);
+  return sanitizeForWire(getPayrollSummaryInternal(params));
+}
+
+function getPayrollSummaryInternal(params) {
   const p = params || {};
   const startDate = toYmd(p.startDate || '');
   const endDate = toYmd(p.endDate || '');
@@ -3516,10 +3745,10 @@ function getPayrollSummary(token, params) {
     };
   });
 
-  return sanitizeForWire({
+  return {
     workers: workers,
     history: history.slice().reverse()
-  });
+  };
 }
 
 /**
@@ -4126,7 +4355,7 @@ function archiveOldDataTrigger() {
     let totalArchived = 0;
 
     function archiveTable(sourceName, archiveName, isClosedFn) {
-      const tbl = getTableData(sourceName);
+      const tbl = getTableData(sourceName, true);
       const toArchive = [];
       const rowIndicesToDelete = [];
       tbl.rows.forEach(function (r) {
@@ -4140,6 +4369,7 @@ function archiveOldDataTrigger() {
       for (let i = rowIndicesToDelete.length - 1; i >= 0; i--) {
         tbl.sheet.deleteRow(rowIndicesToDelete[i]);
       }
+      invalidateTableCache(sourceName);
       return toArchive.length;
     }
 
